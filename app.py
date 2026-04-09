@@ -2,86 +2,91 @@ import streamlit as st
 import json
 from datetime import datetime
 
-st.set_page_config(page_title="Tối ưu Phân chia Mùa vụ", layout="wide")
-
-def get_optimized_seasons(all_data, id_tuoi, freq_step=5, max_allowed=40):
+def phan_chia_giai_doan_tinh_gon(all_data, id_tuoi, id_cp, mode, step_tuoi=6, step_ec=40):
     fmt = "%Y-%m-%d %H-%M-%S"
-    # 1. Lấy dữ liệu tưới và đếm số lần theo ngày
-    data_tuoi = [d for d in all_data if str(d.get('STT')) == str(id_tuoi)]
-    if not data_tuoi: return []
-
-    daily_counts = {}
-    for d in data_tuoi:
-        dt = datetime.strptime(d['Thời gian'], fmt).date()
-        daily_counts[dt] = daily_counts.get(dt, 0) + 1
     
-    sorted_days = sorted(daily_counts.keys())
+    # 1. Xử lý dữ liệu Lịch tưới
+    data_tuoi = sorted([d for d in all_data if str(d.get('STT')) == str(id_tuoi)], 
+                       key=lambda x: datetime.strptime(x['Thời gian'], fmt))
+    
+    # 2. Xử lý dữ liệu EC (từ file châm phân)
+    data_cp = sorted([d for d in all_data if str(d.get('STT')) == str(id_cp)], 
+                      key=lambda x: datetime.strptime(x['Thời gian'], fmt))
+
     seasons = []
-    if not sorted_days: return []
 
-    # 2. Bắt đầu gom nhóm
-    current_start = sorted_days[0]
-    # Lọc nhiễu: Nếu số lần tưới > max_allowed, đưa về giá trị trần hoặc bỏ qua lỗi
-    def get_clean_val(d):
-        val = daily_counts[d]
-        return val if val <= max_allowed else max_allowed
+    # --- CHIA THEO LỊCH TƯỚI ---
+    if mode == "Theo Lịch tưới":
+        daily_counts = {}
+        for d in data_tuoi:
+            dt = datetime.strptime(d['Thời gian'], fmt).date()
+            daily_counts[dt] = daily_counts.get(dt, 0) + 1
+        
+        sorted_days = sorted(daily_counts.keys())
+        if not sorted_days: return []
 
-    group_val = get_clean_val(current_start)
-    
-    for i in range(1, len(sorted_days)):
-        curr_d = sorted_days[i]
-        prev_d = sorted_days[i-1]
-        curr_val = get_clean_val(curr_d)
+        curr_start = sorted_days[0]
+        curr_val = daily_counts[curr_start]
         
-        # ĐIỀU KIỆN GỘP: 
-        # - Số lần tưới chênh lệch không quá freq_step (ví dụ: 5 lần)
-        # - Không bị ngắt quãng quá 3 ngày
-        is_same_phase = abs(curr_val - group_val) <= freq_step and (curr_d - prev_d).days <= 3
-        
-        if not is_same_phase:
-            # Chốt giai đoạn cũ
-            seasons.append({
-                "start": current_start,
-                "end": prev_d,
-                "avg_freq": group_val
-            })
-            # Bắt đầu giai đoạn mới
-            current_start = curr_d
-            group_val = curr_val
+        for i in range(1, len(sorted_days)):
+            d_p, d_c = sorted_days[i-1], sorted_days[i]
+            v_c = daily_counts[d_c]
             
-    # Thêm giai đoạn cuối
-    seasons.append({
-        "start": current_start,
-        "end": sorted_days[-1],
-        "avg_freq": group_val
-    })
+            # Ngắt khi: Lệch số lần > step_tuoi HOẶC nghỉ > 2 ngày
+            if abs(v_c - curr_val) > step_tuoi or (d_c - d_p).days > 2:
+                seasons.append({
+                    "Bắt đầu": curr_start, 
+                    "Kết thúc": d_p, 
+                    "Giá trị": f"~{curr_val} lần/ngày"
+                })
+                curr_start, curr_val = d_c, v_c
+        seasons.append({"Bắt đầu": curr_start, "Kết thúc": sorted_days[-1], "Giá trị": f"~{curr_val} lần/ngày"})
+
+    # --- CHIA THEO EC (Thực tế hoặc Yêu cầu) ---
+    else:
+        if not data_cp: return []
+        attr = "EC yêu cầu" if mode == "Theo EC Yêu cầu" else "TBEC"
+        curr_start_node = data_cp[0]
+        curr_val = float(curr_start_node.get(attr, 0))
+
+        for i in range(1, len(data_cp)):
+            prev, curr = data_cp[i-1], data_cp[i]
+            v_c = float(curr.get(attr, 0))
+            
+            # Chỉ ngắt nếu giá trị EC nhảy vọt vượt ngưỡng step_ec
+            if abs(v_c - curr_val) >= step_ec:
+                seasons.append({
+                    "Bắt đầu": curr_start_node['Thời gian'], 
+                    "Kết thúc": prev['Thời gian'], 
+                    "Giá trị": f"{round(curr_val, 1)} (EC)"
+                })
+                curr_start_node, curr_val = curr, v_c
+        seasons.append({"Bắt đầu": curr_start_node['Thời gian'], "Kết thúc": data_cp[-1]['Thời gian'], "Giá trị": f"{round(curr_val, 1)} (EC)"})
+
     return seasons
 
-# --- GIAO DIỆN ---
-st.sidebar.header("Cấu hình Tối ưu")
-uploaded_files = st.sidebar.file_uploader("Tải file JSON", type=["json"], accept_multiple_files=True)
+# --- GIAO DIỆN STREAMLIT ---
+st.title("Phân chia Mùa vụ & Giai đoạn")
+uploaded = st.sidebar.file_uploader("Tải File JSON", accept_multiple_files=True)
 
-if uploaded_files:
-    all_data = []
-    for f in uploaded_files:
+if uploaded:
+    all_raw = []
+    for f in uploaded:
         content = json.load(f)
-        all_data.extend(content) if isinstance(content, list) else all_data.append(content)
+        all_raw.extend(content) if isinstance(content, list) else all_raw.append(content)
 
-    ids = sorted(list(set(str(d.get('STT')) for d in all_data if 'STT' in d)))
-    id_tuoi = st.sidebar.selectbox("STT File Nhỏ giọt", ids)
-    
-    # Hai thông số quan trọng để giảm số giai đoạn
-    freq_step = st.sidebar.slider("Độ lệch gộp (Số lần)", 2, 15, 8) 
-    max_limit = st.sidebar.number_input("Giới hạn số lần tưới tối đa/ngày (Lọc nhiễu)", value=35)
+    with st.sidebar:
+        mode = st.radio("Chia theo:", ["Theo Lịch tưới", "Theo EC Yêu cầu", "Theo EC Thực tế"])
+        id_tuoi = st.text_input("STT Nhỏ giọt", "2")
+        id_cp = st.text_input("STT Châm phân", "1")
+        st.divider()
+        st.write("Cài đặt độ nhạy (Gộp giai đoạn)")
+        sens_tuoi = st.slider("Độ lệch lần tưới để tách GĐ", 2, 15, 6)
+        sens_ec = st.slider("Độ lệch EC để tách GĐ", 10, 100, 40)
 
-    results = get_optimized_seasons(all_data, id_tuoi, freq_step, max_limit)
+    res = phan_chia_giai_doan_tinh_gon(all_raw, id_tuoi, id_cp, mode, sens_tuoi, sens_ec)
 
-    if results:
-        st.subheader(f"Bảng chia mùa vụ rút gọn (Tổng cộng: {len(results)} giai đoạn)")
-        
-        header = "| GĐ | Ngày bắt đầu | Ngày kết thúc | Tần suất trung bình |\n|---|---|---|---|\n"
-        rows = ""
-        for i, r in enumerate(results):
-            rows += f"| {i+1} | {r['start']} | {r['end']} | ~{r['avg_freq']} lần/ngày |\n"
-            
+    if res:
+        header = "| Giai đoạn | Ngày bắt đầu | Ngày kết thúc | Thông số chính |\n|---|---|---|---|\n"
+        rows = "".join([f"| {i+1} | {r['Bắt đầu']} | {r['Kết thúc']} | {r['Giá trị']} |\n" for i, r in enumerate(res)])
         st.markdown(header + rows)
