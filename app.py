@@ -5,18 +5,18 @@ import matplotlib.ticker as ticker
 from datetime import datetime
 
 # --- CẤU HÌNH CỐ ĐỊNH ---
-MIN_DURATION_SECONDS = 20  # Bộ lọc lần tưới hoàn chỉnh
+MIN_DURATION_SECONDS = 20
 MIN_PUMP_PER_DAY = 5       
 MAX_GAP_DAYS = 2           
 MIN_SEASON_DURATION = 7    
 
 # --- CẤU HÌNH GIAO DIỆN ---
 st.set_page_config(page_title="Phân tích tưới nhỏ giọt", layout="wide")
-st.title("💧 Hệ Thống Phân Tích Mùa Vụ Tối Ưu")
+st.title("💧 Hệ Thống Phân Tích Mùa Vụ")
 
 # Sidebar
-st.sidebar.header("Dữ liệu đầu vào")
-FILE_UPLOAD = st.sidebar.file_uploader("Chọn file 'Lich nho giotj.json'", type=['json'])
+st.sidebar.header("📁 Quản lý dữ liệu")
+FILES_UPLOAD = st.sidebar.file_uploader("Tải lên các file JSON", type=['json'], accept_multiple_files=True)
 KHU_VUC_ID_INPUT = st.sidebar.number_input("ID Khu Vực cần phân tích", value=2)
 
 def ve_bieu_do_don(vu_chon, stt_vu):
@@ -27,7 +27,7 @@ def ve_bieu_do_don(vu_chon, stt_vu):
     
     fig, ax = plt.subplots(figsize=(12, 5))
     bars = ax.bar(dates, counts, color='#2ca02c', edgecolor='white', alpha=0.85)
-    ax.axhline(y=MIN_PUMP_PER_DAY, color='red', linestyle='--', alpha=0.4, label=f'Ngưỡng tối thiểu ({MIN_PUMP_PER_DAY} lần)')
+    ax.axhline(y=MIN_PUMP_PER_DAY, color='red', linestyle='--', alpha=0.4, label='Ngưỡng tối thiểu')
 
     ax.xaxis.set_major_locator(ticker.MaxNLocator(nbins=15))
     ax.set_title(f"BIỂU ĐỒ SỐ LẦN TƯỚI HOÀN CHỈNH - VỤ {stt_vu}", fontsize=14, fontweight='bold')
@@ -43,12 +43,12 @@ def ve_bieu_do_don(vu_chon, stt_vu):
     
     st.pyplot(fig)
 
-def thuc_thi_tong_hop(data_lich):
+def thuc_thi_tong_hop(data_tong_hop):
     stt_chuoi = str(KHU_VUC_ID_INPUT)
     fmt = "%Y-%m-%d %H-%M-%S"
 
     # 1. Lọc và làm sạch dữ liệu
-    du_lieu_khu = sorted([d for d in data_lich if d.get('STT') == stt_chuoi],
+    du_lieu_khu = sorted([d for d in data_tong_hop if d.get('STT') == stt_chuoi],
                         key=lambda x: datetime.strptime(x['Thời gian'], fmt))
     
     daily_details = {} 
@@ -99,23 +99,18 @@ def thuc_thi_tong_hop(data_lich):
         return
 
     # --- GIAO DIỆN CHỌN VỤ ---
-    st.subheader("📁 Danh sách mùa vụ")
+    st.subheader(f"📊 Kết quả phân tích Khu {KHU_VUC_ID_INPUT}")
     options = [f"Vụ {i+1}: {v['start']} -> {v['end']}" for i, v in enumerate(danh_sach_vu)]
     selection = st.selectbox("Chọn mùa vụ để xem chi tiết:", options)
     
     index_chon = options.index(selection)
     vu_hien_tai = danh_sach_vu[index_chon]
 
-    # Hiển thị biểu đồ
     ve_bieu_do_don(vu_hien_tai, index_chon + 1)
 
-    # --- BẢNG CHI TIẾT ---
     st.markdown(f"#### 📅 Bảng kê chi tiết - Vụ {index_chon + 1}")
-    
-    # HÀNG TỔNG KẾT MÙA VỤ (Yêu cầu mới)
-    st.info(f"📊 **TỔNG KẾT VỤ:** Kéo dài **{vu_hien_tai['duration']} ngày** | Tổng cộng **{vu_hien_tai['total_pumps']} lần tưới** hoàn chỉnh (>=20s)")
+    st.info(f"📋 **TỔNG KẾT VỤ:** Kéo dài **{vu_hien_tai['duration']} ngày** | Tổng cộng **{vu_hien_tai['total_pumps']} lần tưới** hoàn chỉnh (>=20s)")
 
-    # Header bảng ngày
     c1, c2, c3 = st.columns([2, 2, 3])
     c1.write("**Ngày**")
     c2.write("**Số lần tưới**")
@@ -133,9 +128,28 @@ def thuc_thi_tong_hop(data_lich):
         r2.write(f"✅ {info['count']} lần")
         r3.write(f"⏱️ {mins} phút {secs} giây")
 
-# Chạy chương trình
-if FILE_UPLOAD is not None:
-    data = json.load(FILE_UPLOAD)
-    thuc_thi_tong_hop(data)
+# --- XỬ LÝ NHIỀU FILE VÀ BỘ CHỌN THỦ CÔNG ---
+if FILES_UPLOAD:
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🎯 Chọn file để quét")
+    
+    selected_files_data = []
+    # Hiển thị checkbox cho từng file đã upload
+    for f in FILES_UPLOAD:
+        is_selected = st.sidebar.checkbox(f"Sử dụng: {f.name}", value=True, key=f.name)
+        if is_selected:
+            selected_files_data.append(f)
+    
+    data_tong_hop = []
+    for uploaded_file in selected_files_data:
+        # Load dữ liệu từng file được chọn
+        content = json.load(uploaded_file)
+        if isinstance(content, list):
+            data_tong_hop.extend(content)
+            
+    if data_tong_hop:
+        thuc_thi_tong_hop(data_tong_hop)
+    else:
+        st.warning("Vui lòng tích chọn ít nhất một file ở thanh bên để bắt đầu phân tích.")
 else:
-    st.info("👋 Hãy tải file JSON lên để bắt đầu.")
+    st.info("👋 Chào mừng! Hãy tải các file JSON lên và chọn file cần quét ở thanh bên trái.")
