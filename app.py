@@ -2,103 +2,98 @@ import streamlit as st
 import json
 from datetime import datetime
 
-st.set_page_config(page_title="Hệ thống Phân tích EC", layout="wide")
+st.set_page_config(page_title="Phân chia Giai đoạn Canh tác", layout="wide")
 
-# --- 1. LOGIC CHIA GIAI ĐOẠN (Dùng List/Dict thuần) ---
-def get_seasons(data, mode, freq_threshold=3):
+# --- 1. LOGIC PHÂN TÍCH ---
+def get_seasons_logic(all_data, mode, id_tuoi, id_cham_phan, thresholds):
     fmt = "%Y-%m-%d %H-%M-%S"
-    if not data: return []
     
-    # Sắp xếp dữ liệu theo thời gian
-    data = sorted(data, key=lambda x: datetime.strptime(x['Thời gian'], fmt))
-    
-    # Tính tần suất cho chế độ Biến động Tần suất
-    daily_counts = {}
-    for d in data:
-        dt = datetime.strptime(d['Thời gian'], fmt).date()
-        daily_counts[dt] = daily_counts.get(dt, 0) + 1
+    # Tách dữ liệu theo vai trò
+    data_tuoi = sorted([d for d in all_data if str(d.get('STT')) == str(id_tuoi)], 
+                       key=lambda x: datetime.strptime(x['Thời gian'], fmt))
+    data_cp = sorted([d for d in all_data if str(d.get('STT')) == str(id_cham_phan)], 
+                      key=lambda x: datetime.strptime(x['Thời gian'], fmt))
 
     seasons = []
-    current_batch = [data[0]]
-
-    for i in range(1, len(data)):
-        prev, curr = data[i-1], data[i]
-        t_p = datetime.strptime(prev['Thời gian'], fmt)
-        t_c = datetime.strptime(curr['Thời gian'], fmt)
-        
-        is_break = False
-        if mode == "Biến động Tần suất":
-            if abs(daily_counts[t_c.date()] - daily_counts[t_p.date()]) >= freq_threshold:
-                is_break = True
-            elif (t_c - t_p).days > 2: is_break = True
-        elif mode == "EC Kế hoạch":
-            if curr.get("EC yêu cầu") != prev.get("EC yêu cầu"): is_break = True
-        elif mode == "EC Thực tế":
-            v_p = float(prev.get('TBEC', 0))
-            v_c = float(curr.get('TBEC', 0))
-            if abs(v_c - v_p) > 30: is_break = True
-
-        if is_break:
-            seasons.append(current_batch)
-            current_batch = [curr]
-        else:
-            current_batch.append(curr)
     
-    seasons.append(current_batch)
+    # --- CÁCH 1: THEO LỊCH TƯỚI (Chỉ dùng file nhỏ giọt) ---
+    if mode == "Theo Lịch tưới":
+        if not data_tuoi: return []
+        daily_counts = {}
+        for d in data_tuoi:
+            dt = datetime.strptime(d['Thời gian'], fmt).date()
+            daily_counts[dt] = daily_counts.get(dt, 0) + 1
+        
+        sorted_days = sorted(daily_counts.keys())
+        current_batch = [sorted_days[0]]
+        
+        for i in range(1, len(sorted_days)):
+            prev_d, curr_d = sorted_days[i-1], sorted_days[i]
+            # Ngắt khi số lần tưới lệch quá ngưỡng (thresholds['tuoi'])
+            if abs(daily_counts[curr_d] - daily_counts[prev_d]) >= thresholds['tuoi'] or (curr_d - prev_d).days > 2:
+                seasons.append({"start": current_batch[0], "end": current_batch[-1], "info": f"{daily_counts[current_batch[0]]} lần/ngày"})
+                current_batch = [curr_d]
+            else:
+                current_batch.append(curr_d)
+        seasons.append({"start": current_batch[0], "end": current_batch[-1], "info": f"{daily_counts[current_batch[0]]} lần/ngày"})
+
+    # --- CÁCH 2 & 3: THEO EC (Chỉ dùng file châm phân) ---
+    else:
+        if not data_cp: return []
+        current_batch = [data_cp[0]]
+        attr = "EC yêu cầu" if mode == "Theo EC Yêu cầu" else "TBEC"
+        
+        for i in range(1, len(data_cp)):
+            prev, curr = data_cp[i-1], data_cp[i]
+            val_p = float(prev.get(attr, 0))
+            val_c = float(curr.get(attr, 0))
+            
+            # Ngắt khi giá trị EC lệch vượt ngưỡng (thresholds['ec'])
+            if abs(val_c - val_p) >= thresholds['ec']:
+                seasons.append({"start": current_batch[0]['Thời gian'], "end": prev['Thời gian'], "val": val_p})
+                current_batch = [curr]
+            else:
+                current_batch.append(curr)
+        seasons.append({"start": current_batch[0]['Thời gian'], "end": data_cp[-1]['Thời gian'], "val": float(current_batch[0].get(attr, 0))})
+
     return seasons
 
-# --- 2. GIAO DIỆN CHÍNH ---
-st.title("📊 Kết quả Phân tích EC (Xử lý List thuần)")
+# --- 2. GIAO DIỆN ---
+st.title("📋 Phân chia Giai đoạn Mùa vụ")
 
-uploaded_files = st.sidebar.file_uploader("Tải các file JSON", type=["json"], accept_multiple_files=True)
+uploaded_files = st.sidebar.file_uploader("Tải 2 file JSON (Nhỏ giọt & Châm phân)", type=["json"], accept_multiple_files=True)
 
-all_data = []
 if uploaded_files:
+    all_data = []
     for f in uploaded_files:
-        try:
-            content = json.load(f)
-            if isinstance(content, list): all_data.extend(content)
-            else: all_data.append(content)
-        except Exception as e:
-            st.sidebar.error(f"Lỗi đọc file {f.name}: {e}")
+        content = json.load(f)
+        all_data.extend(content) if isinstance(content, list) else all_data.append(content)
 
-    if all_data:
-        # Tự động lọc các STT có dữ liệu TBEC để tránh màn hình trống
-        ids_with_ec = sorted(list(set(str(d.get('STT')) for d in all_data if 'TBEC' in d)))
+    ids = sorted(list(set(str(d.get('STT')) for d in all_data if 'STT' in d)))
+    
+    with st.sidebar:
+        mode = st.radio("Chọn tiêu chí chia:", ["Theo Lịch tưới", "Theo EC Yêu cầu", "Theo EC Thực tế"])
+        id_tuoi = st.selectbox("STT File Nhỏ giọt (Lịch tưới)", ids, index=0)
+        id_cp = st.selectbox("STT File Châm phân (EC)", ids, index=min(1, len(ids)-1))
         
-        if not ids_with_ec:
-            st.warning("Không tìm thấy thiết bị nào có dữ liệu EC (trường TBEC).")
-        else:
-            with st.sidebar:
-                st.success(f"Đã nhận {len(all_data)} bản ghi.")
-                mode = st.selectbox("Cách chia giai đoạn", ["Biến động Tần suất", "EC Kế hoạch", "EC Thực tế"])
-                selected_id = st.selectbox("Chọn STT Máy châm phân", ids_with_ec)
-                threshold = st.slider("Ngưỡng lệch tần suất", 1, 10, 3)
+        st.divider()
+        st.write("**Ngưỡng lọc (Để tránh chia quá nhiều)**")
+        t_tuoi = st.slider("Lệch số lần tưới để ngắt GĐ", 1, 10, 3)
+        t_ec = st.slider("Lệch đơn vị EC để ngắt GĐ", 10, 100, 40)
 
-            # Lọc dữ liệu theo STT được chọn
-            filtered = [d for d in all_data if str(d.get('STT')) == selected_id]
+    results = get_seasons_logic(all_data, mode, id_tuoi, id_cp, {'tuoi': t_tuoi, 'ec': t_ec})
+
+    if results:
+        st.subheader(f"Kết quả chia mùa vụ: {mode}")
+        
+        if mode == "Theo Lịch tưới":
+            header = "| Giai đoạn | Ngày bắt đầu | Ngày kết thúc | Đặc điểm vận hành |\n|---|---|---|---|\n"
+            rows = "".join([f"| {i+1} | {r['start']} | {r['end']} | {r['info']} |\n" for i, r in enumerate(results)])
+        else:
+            label = "Mức EC Yêu cầu" if mode == "Theo EC Yêu cầu" else "Mức TBEC thực tế"
+            header = f"| Giai đoạn | Thời điểm bắt đầu | Thời điểm kết thúc | {label} |\n|---|---|---|---|\n"
+            rows = "".join([f"| {i+1} | {r['start']} | {r['end']} | {round(r['val'], 1)} |\n" for i, r in enumerate(results)])
             
-            if filtered:
-                seasons = get_seasons(filtered, mode, threshold)
-                
-                # Hiển thị tiêu đề
-                st.subheader(f"Dữ liệu chia theo: {mode}")
-                
-                # Tạo header cho bảng (Dùng Markdown thay cho st.table/pandas)
-                header = "| GĐ | Bắt đầu | Kết thúc | Số bản ghi | EC Yêu cầu | TBEC Thực tế | Độ lệch |\n"
-                header += "|---|---|---|---|---|---|---|\n"
-                
-                rows = ""
-                for idx, group in enumerate(seasons):
-                    reals = [float(d.get('TBEC', 0)) for d in group]
-                    targets = [float(d.get('EC yêu cầu', 0)) for d in group]
-                    
-                    avg_r = sum(reals)/len(reals) if reals else 0
-                    avg_t = sum(targets)/len(targets) if targets else 0
-                    diff = ((avg_r - avg_t)/avg_t * 100) if avg_t > 0 else 0
-                    
-                    rows += f"| {idx+1} | {group[0]['Thời gian']} | {group[-1]['Thời gian']} | {len(group)} | {round(avg_t, 1)} | {round(avg_r, 1)} | {round(diff, 1)}% |\n"
-                
-                st.markdown(header + rows)
+        st.markdown(header + rows)
     else:
-        st.info("Hãy tải file JSON để bắt đầu.")
+        st.warning("Vui lòng kiểm tra lại STT thiết bị tương ứng với từng file.")
