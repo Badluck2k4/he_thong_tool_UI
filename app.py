@@ -5,10 +5,10 @@ import matplotlib.ticker as ticker
 from datetime import datetime
 
 # --- CẤU HÌNH CỐ ĐỊNH ---
-MIN_DURATION_SECONDS = 20
-MIN_PUMP_PER_DAY = 5
-MAX_GAP_DAYS = 2
-MIN_SEASON_DURATION = 7
+MIN_DURATION_SECONDS = 20  # Bộ lọc lần tưới hoàn chỉnh
+MIN_PUMP_PER_DAY = 5       
+MAX_GAP_DAYS = 2           
+MIN_SEASON_DURATION = 7    
 
 # --- CẤU HÌNH GIAO DIỆN ---
 st.set_page_config(page_title="Phân tích tưới nhỏ giọt", layout="wide")
@@ -20,18 +20,18 @@ FILE_UPLOAD = st.sidebar.file_uploader("Chọn file 'Lich nho giotj.json'", type
 KHU_VUC_ID_INPUT = st.sidebar.number_input("ID Khu Vực cần phân tích", value=2)
 
 def ve_bieu_do_don(vu_chon, stt_vu):
-    """Vẽ biểu đồ cho duy nhất 1 vụ được chọn"""
+    """Vẽ biểu đồ cho vụ được chọn"""
     stats = vu_chon['daily_stats']
     dates = sorted(stats.keys())
-    counts = [s['count'] for s in [stats[d] for d in dates]]
+    counts = [stats[d]['count'] for d in dates]
     
     fig, ax = plt.subplots(figsize=(12, 5))
     bars = ax.bar(dates, counts, color='#2ca02c', edgecolor='white', alpha=0.85)
-    ax.axhline(y=MIN_PUMP_PER_DAY, color='red', linestyle='--', alpha=0.4, label='Ngưỡng tối thiểu')
+    ax.axhline(y=MIN_PUMP_PER_DAY, color='red', linestyle='--', alpha=0.4, label=f'Ngưỡng tối thiểu ({MIN_PUMP_PER_DAY} lần)')
 
     ax.xaxis.set_major_locator(ticker.MaxNLocator(nbins=15))
-    ax.set_title(f"BIỂU ĐỒ CHI TIẾT VỤ {stt_vu}", fontsize=14, fontweight='bold')
-    ax.set_ylabel("Số lần tưới")
+    ax.set_title(f"BIỂU ĐỒ SỐ LẦN TƯỚI HOÀN CHỈNH - VỤ {stt_vu}", fontsize=14, fontweight='bold')
+    ax.set_ylabel("Số lần tưới (>=20s)")
     ax.tick_params(axis='x', rotation=30)
     ax.grid(axis='y', linestyle='--', alpha=0.3)
     ax.legend()
@@ -47,12 +47,10 @@ def thuc_thi_tong_hop(data_lich):
     stt_chuoi = str(KHU_VUC_ID_INPUT)
     fmt = "%Y-%m-%d %H-%M-%S"
 
-    # 1. Lọc và tính toán thời gian tưới
+    # 1. Lọc và làm sạch dữ liệu
     du_lieu_khu = sorted([d for d in data_lich if d.get('STT') == stt_chuoi],
                         key=lambda x: datetime.strptime(x['Thời gian'], fmt))
     
-    lan_tuoi_hop_le = []
-    # Lưu trữ chi tiết: { ngày: {'count': số lần, 'total_time': tổng giây} }
     daily_details = {} 
 
     for i in range(len(du_lieu_khu) - 1):
@@ -63,9 +61,7 @@ def thuc_thi_tong_hop(data_lich):
             duration = (t2 - t1).total_seconds()
             
             if duration >= MIN_DURATION_SECONDS:
-                lan_tuoi_hop_le.append(t1)
                 d_str = t1.strftime("%Y-%m-%d")
-                
                 if d_str not in daily_details:
                     daily_details[d_str] = {'count': 0, 'total_time': 0}
                 daily_details[d_str]['count'] += 1
@@ -76,7 +72,7 @@ def thuc_thi_tong_hop(data_lich):
                          for n, info in daily_details.items() if info['count'] >= MIN_PUMP_PER_DAY])
     
     if not ngay_hop_le:
-        st.warning(f"Không tìm thấy dữ liệu cho Khu {KHU_VUC_ID_INPUT}")
+        st.warning(f"⚠️ Không tìm thấy dữ liệu đạt chuẩn cho Khu {KHU_VUC_ID_INPUT}")
         return
 
     danh_sach_vu = []
@@ -99,29 +95,31 @@ def thuc_thi_tong_hop(data_lich):
         danh_sach_vu.append(get_vu_data(bat_dau, truoc_do))
 
     if not danh_sach_vu:
-        st.warning("Không có mùa vụ nào đủ độ dài tối thiểu.")
+        st.warning("⚠️ Không có vụ nào đủ độ dài tối thiểu 7 ngày.")
         return
 
     # --- GIAO DIỆN CHỌN VỤ ---
-    st.subheader("📁 Danh sách mùa vụ đã phát hiện")
-    options = [f"Vụ {i+1}: từ {v['start']} đến {v['end']}" for i, v in enumerate(danh_sach_vu)]
+    st.subheader("📁 Danh sách mùa vụ")
+    options = [f"Vụ {i+1}: {v['start']} -> {v['end']}" for i, v in enumerate(danh_sach_vu)]
     selection = st.selectbox("Chọn mùa vụ để xem chi tiết:", options)
     
-    # Lấy index của vụ được chọn
     index_chon = options.index(selection)
     vu_hien_tai = danh_sach_vu[index_chon]
 
     # Hiển thị biểu đồ
     ve_bieu_do_don(vu_hien_tai, index_chon + 1)
 
-    # Hiển thị bảng chi tiết ngày
-    st.markdown(f"#### 📅 Chi tiết từng ngày - Vụ {index_chon + 1}")
+    # --- BẢNG CHI TIẾT ---
+    st.markdown(f"#### 📅 Bảng kê chi tiết - Vụ {index_chon + 1}")
     
-    # Header của bảng chi tiết
+    # HÀNG TỔNG KẾT MÙA VỤ (Yêu cầu mới)
+    st.info(f"📊 **TỔNG KẾT VỤ:** Kéo dài **{vu_hien_tai['duration']} ngày** | Tổng cộng **{vu_hien_tai['total_pumps']} lần tưới** hoàn chỉnh (>=20s)")
+
+    # Header bảng ngày
     c1, c2, c3 = st.columns([2, 2, 3])
     c1.write("**Ngày**")
     c2.write("**Số lần tưới**")
-    c3.write("**Tổng thời gian (phút:giây)**")
+    c3.write("**Tổng thời gian**")
     st.divider()
 
     stats_selected = vu_hien_tai['daily_stats']
@@ -132,8 +130,8 @@ def thuc_thi_tong_hop(data_lich):
         
         r1, r2, r3 = st.columns([2, 2, 3])
         r1.write(ngay)
-        r2.write(str(info['count']))
-        r3.write(f"{mins} phút {secs} giây")
+        r2.write(f"✅ {info['count']} lần")
+        r3.write(f"⏱️ {mins} phút {secs} giây")
 
 # Chạy chương trình
 if FILE_UPLOAD is not None:
