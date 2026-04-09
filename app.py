@@ -8,21 +8,22 @@ from datetime import datetime
 st.set_page_config(page_title="Phân tích tưới nhỏ giọt", layout="wide")
 st.title("💧 Hệ Thống Phân Tích Mùa Vụ")
 
-# Sidebar để thay đổi thông số giống như các biến constant ở đầu code cũ
+# Sidebar - Thiết lập các giá trị mặc định theo hình ảnh của bạn
 st.sidebar.header("Cấu hình bộ lọc")
 FILE_UPLOAD = st.sidebar.file_uploader("Chọn file 'Lich nho giotj.json'", type=['json'])
 KHU_VUC_ID = st.sidebar.number_input("ID Khu Vực", value=2)
-MIN_DURATION_SECONDS = st.sidebar.slider("Thời gian tưới tối thiểu (giây)", 10, 60, 20)
-MIN_PUMP_PER_DAY = st.sidebar.slider("Số lần tưới tối thiểu/ngày", 1, 10, 5)
-MAX_GAP_DAYS = st.sidebar.slider("Khoảng cách ngày tối đa", 1, 5, 2)
-MIN_SEASON_DURATION = st.sidebar.slider("Thời lượng vụ tối thiểu (ngày)", 1, 15, 7)
+
+# Điều chỉnh các giá trị mặc định (default) tại đây:
+MIN_DURATION_SECONDS = st.sidebar.slider("Thời gian tưới tối thiểu (giây)", 0, 100, 20)
+MIN_PUMP_PER_DAY = st.sidebar.slider("Số lần tưới tối thiểu/ngày", 0, 50, 5)
+MAX_GAP_DAYS = st.sidebar.slider("Khoảng cách ngày tối đa", 0, 10, 2)
+MIN_SEASON_DURATION = st.sidebar.slider("Thời lượng vụ tối thiểu (ngày)", 0, 30, 7)
 
 def ve_bieu_do_thoang(danh_sach_vu):
-    """Giữ nguyên hàm vẽ biểu đồ của bạn, chỉ thay plt.show() bằng st.pyplot()"""
+    """Giữ nguyên hàm vẽ biểu đồ gốc"""
     num_seasons = len(danh_sach_vu)
     if num_seasons == 0: return
 
-    # Tạo figure
     fig, axes = plt.subplots(num_seasons, 1, figsize=(15, 6 * num_seasons))
     if num_seasons == 1: axes = [axes]
 
@@ -49,9 +50,10 @@ def ve_bieu_do_thoang(danh_sach_vu):
                         ha='center', va='bottom', fontsize=8, color='#444')
 
     plt.tight_layout(pad=4.0)
-    st.pyplot(fig) # Hiển thị lên Streamlit
+    st.pyplot(fig)
 
 def thuc_thi_tong_hop(data_lich):
+    """Giữ nguyên logic gốc"""
     stt_chuoi = str(KHU_VUC_ID)
     fmt = "%Y-%m-%d %H-%M-%S"
 
@@ -83,10 +85,9 @@ def thuc_thi_tong_hop(data_lich):
     bat_dau = ngay_hop_le[0]
     truoc_do = ngay_hop_le[0]
 
-    # Hiển thị bảng kết quả thay cho lệnh print()
     st.subheader(f"BÁO CÁO CHI TIẾT KHU {KHU_VUC_ID}")
     
-    # Tạo header cho bảng
+    # Hiển thị tiêu đề bảng
     cols = st.columns([1, 2, 2, 1, 2])
     cols[0].write("**STT**")
     cols[1].write("**Bắt đầu**")
@@ -99,7 +100,6 @@ def thuc_thi_tong_hop(data_lich):
         dur = (e - s).days + 1
         total = sum(1 for d in lan_tuoi_hop_le if s <= d.date() <= e)
         
-        # Hiển thị dòng dữ liệu lên UI
         c = st.columns([1, 2, 2, 1, 2])
         c[0].write(stt)
         c[1].write(str(s))
@@ -119,11 +119,10 @@ def thuc_thi_tong_hop(data_lich):
             bat_dau = ngay_hop_le[i]
         truoc_do = ngay_hop_le[i]
 
-    # Vụ cuối
     if (truoc_do - bat_dau).days + 1 >= MIN_SEASON_DURATION:
         danh_sach_vu.append(add_vu(stt_vu, bat_dau, truoc_do))
 
-    st.write("") # Tạo khoảng cách
+    st.write("") 
     ve_bieu_do_thoang(danh_sach_vu)
 
 # Chạy chương trình
@@ -131,4 +130,4 @@ if FILE_UPLOAD is not None:
     data = json.load(FILE_UPLOAD)
     thuc_thi_tong_hop(data)
 else:
-    st.info("Vui lòng tải file JSON lên để xem kết quả.")
+    st.info("👋 Chào bạn! Hãy tải file JSON lên để bắt đầu phân tích.")
