@@ -1,60 +1,104 @@
 import streamlit as st
 import json
-import pandas as pd
 from datetime import datetime
 
-# --- 1. CẤU HÌNH GIAO DIỆN ---
-st.set_page_config(page_title="Phân tích Đa File EC", layout="wide")
+st.set_page_config(page_title="Hệ thống Phân tích EC", layout="wide")
 
-# --- 2. LOGIC PHÂN TÍCH (Giữ nguyên các hàm get_data_seasons đã tối ưu) ---
-def get_data_seasons(all_combined_data, mode, selected_id):
+# --- 1. LOGIC CHIA GIAI ĐOẠN (Dùng List/Dict thuần) ---
+def get_seasons(data, mode, freq_threshold=3):
     fmt = "%Y-%m-%d %H-%M-%S"
+    if not data: return []
     
-    # Lọc dữ liệu theo STT ngay sau khi gộp
-    filtered = [d for d in all_combined_data if str(d.get('STT')) == str(selected_id)]
-    if not filtered: return []
+    # Sắp xếp dữ liệu theo thời gian
+    data = sorted(data, key=lambda x: datetime.strptime(x['Thời gian'], fmt))
     
-    cp_data = sorted(filtered, key=lambda x: datetime.strptime(x['Thời gian'], fmt))
-    
-    # ... (Logic chia giai đoạn theo 3 cách đã tóm tắt ở trên) ...
-    # Chèn logic chia giai đoạn vào đây
-    return cp_data # Trả về kết quả sau khi chia
+    # Tính tần suất cho chế độ Biến động Tần suất
+    daily_counts = {}
+    for d in data:
+        dt = datetime.strptime(d['Thời gian'], fmt).date()
+        daily_counts[dt] = daily_counts.get(dt, 0) + 1
 
-# --- 3. PHẦN XỬ LÝ TẢI FILE QUAN TRỌNG ---
-st.sidebar.header("📁 Tải dữ liệu nguồn")
-# Đảm bảo accept_multiple_files=True để chọn được cả 2 file cùng lúc
-uploaded_files = st.sidebar.file_uploader(
-    "Chọn 2 file JSON (Tưới & Châm phân)", 
-    type=["json"], 
-    accept_multiple_files=True
-)
+    seasons = []
+    current_batch = [data[0]]
+
+    for i in range(1, len(data)):
+        prev, curr = data[i-1], data[i]
+        t_p = datetime.strptime(prev['Thời gian'], fmt)
+        t_c = datetime.strptime(curr['Thời gian'], fmt)
+        
+        is_break = False
+        if mode == "Biến động Tần suất":
+            if abs(daily_counts[t_c.date()] - daily_counts[t_p.date()]) >= freq_threshold:
+                is_break = True
+            elif (t_c - t_p).days > 2: is_break = True
+        elif mode == "EC Kế hoạch":
+            if curr.get("EC yêu cầu") != prev.get("EC yêu cầu"): is_break = True
+        elif mode == "EC Thực tế":
+            v_p = float(prev.get('TBEC', 0))
+            v_c = float(curr.get('TBEC', 0))
+            if abs(v_c - v_p) > 30: is_break = True
+
+        if is_break:
+            seasons.append(current_batch)
+            current_batch = [curr]
+        else:
+            current_batch.append(curr)
+    
+    seasons.append(current_batch)
+    return seasons
+
+# --- 2. GIAO DIỆN CHÍNH ---
+st.title("📊 Kết quả Phân tích EC (Xử lý List thuần)")
+
+uploaded_files = st.sidebar.file_uploader("Tải các file JSON", type=["json"], accept_multiple_files=True)
 
 all_data = []
-
 if uploaded_files:
-    # Gộp dữ liệu từ TẤT CẢ các file được chọn
     for f in uploaded_files:
         try:
-            file_content = json.load(f)
-            if isinstance(file_content, list):
-                all_data.extend(file_content)
-            else:
-                all_data.append(file_content)
+            content = json.load(f)
+            if isinstance(content, list): all_data.extend(content)
+            else: all_data.append(content)
         except Exception as e:
-            st.error(f"Lỗi khi đọc file {f.name}: {e}")
+            st.sidebar.error(f"Lỗi đọc file {f.name}: {e}")
 
     if all_data:
-        st.sidebar.success(f"Đã gộp thành công {len(all_data)} bản ghi từ {len(uploaded_files)} file.")
+        # Tự động lọc các STT có dữ liệu TBEC để tránh màn hình trống
+        ids_with_ec = sorted(list(set(str(d.get('STT')) for d in all_data if 'TBEC' in d)))
         
-        # Lấy danh sách STT tổng hợp từ tất cả các file
-        ids = sorted(list(set(str(d.get('STT')) for d in all_data if 'STT' in d)))
-        
-        with st.sidebar:
-            mode = st.selectbox("Cách chia giai đoạn", ["Biến động Tần suất", "EC Kế hoạch", "EC Thực tế"])
-            selected_id = st.selectbox("Chọn STT thiết bị cần soi", ids)
+        if not ids_with_ec:
+            st.warning("Không tìm thấy thiết bị nào có dữ liệu EC (trường TBEC).")
+        else:
+            with st.sidebar:
+                st.success(f"Đã nhận {len(all_data)} bản ghi.")
+                mode = st.selectbox("Cách chia giai đoạn", ["Biến động Tần suất", "EC Kế hoạch", "EC Thực tế"])
+                selected_id = st.selectbox("Chọn STT Máy châm phân", ids_with_ec)
+                threshold = st.slider("Ngưỡng lệch tần suất", 1, 10, 3)
 
-        # Chạy phân tích trên kho dữ liệu tổng all_data
-        # results = get_data_seasons(all_data, mode, selected_id)
-        # ... (Hiển thị bảng dữ liệu) ...
+            # Lọc dữ liệu theo STT được chọn
+            filtered = [d for d in all_data if str(d.get('STT')) == selected_id]
+            
+            if filtered:
+                seasons = get_seasons(filtered, mode, threshold)
+                
+                # Hiển thị tiêu đề
+                st.subheader(f"Dữ liệu chia theo: {mode}")
+                
+                # Tạo header cho bảng (Dùng Markdown thay cho st.table/pandas)
+                header = "| GĐ | Bắt đầu | Kết thúc | Số bản ghi | EC Yêu cầu | TBEC Thực tế | Độ lệch |\n"
+                header += "|---|---|---|---|---|---|---|\n"
+                
+                rows = ""
+                for idx, group in enumerate(seasons):
+                    reals = [float(d.get('TBEC', 0)) for d in group]
+                    targets = [float(d.get('EC yêu cầu', 0)) for d in group]
+                    
+                    avg_r = sum(reals)/len(reals) if reals else 0
+                    avg_t = sum(targets)/len(targets) if targets else 0
+                    diff = ((avg_r - avg_t)/avg_t * 100) if avg_t > 0 else 0
+                    
+                    rows += f"| {idx+1} | {group[0]['Thời gian']} | {group[-1]['Thời gian']} | {len(group)} | {round(avg_t, 1)} | {round(avg_r, 1)} | {round(diff, 1)}% |\n"
+                
+                st.markdown(header + rows)
     else:
-        st.info("Vui lòng chọn cả 2 file để hệ thống có đủ dữ liệu đối chiếu.")
+        st.info("Hãy tải file JSON để bắt đầu.")
