@@ -1,111 +1,134 @@
 import streamlit as st
 import json
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 from datetime import datetime
 
-st.set_page_config(page_title="Phân tích Mùa vụ Chính xác", layout="wide")
+# --- CẤU HÌNH GIAO DIỆN ---
+st.set_page_config(page_title="Phân tích tưới nhỏ giọt", layout="wide")
+st.title("💧 Hệ Thống Phân Tích Mùa Vụ")
 
-def xu_ly_du_lieu_chuan(all_data, id_tuoi, gap_tach_vu=10, jump_threshold=3, sustain_days=4):
+# Sidebar để thay đổi thông số giống như các biến constant ở đầu code cũ
+st.sidebar.header("Cấu hình bộ lọc")
+FILE_UPLOAD = st.sidebar.file_uploader("Chọn file 'Lich nho giotj.json'", type=['json'])
+KHU_VUC_ID = st.sidebar.number_input("ID Khu Vực", value=2)
+MIN_DURATION_SECONDS = st.sidebar.slider("Thời gian tưới tối thiểu (giây)", 10, 60, 20)
+MIN_PUMP_PER_DAY = st.sidebar.slider("Số lần tưới tối thiểu/ngày", 1, 10, 5)
+MAX_GAP_DAYS = st.sidebar.slider("Khoảng cách ngày tối đa", 1, 5, 2)
+MIN_SEASON_DURATION = st.sidebar.slider("Thời lượng vụ tối thiểu (ngày)", 1, 15, 7)
+
+def ve_bieu_do_thoang(danh_sach_vu):
+    """Giữ nguyên hàm vẽ biểu đồ của bạn, chỉ thay plt.show() bằng st.pyplot()"""
+    num_seasons = len(danh_sach_vu)
+    if num_seasons == 0: return
+
+    # Tạo figure
+    fig, axes = plt.subplots(num_seasons, 1, figsize=(15, 6 * num_seasons))
+    if num_seasons == 1: axes = [axes]
+
+    for i, vu in enumerate(danh_sach_vu):
+        stats = vu['daily_stats']
+        dates = sorted(stats.keys())
+        counts = [stats[d] for d in dates]
+        ax = axes[i]
+
+        bars = ax.bar(dates, counts, color='#2ca02c', edgecolor='white', alpha=0.85)
+        ax.axhline(y=MIN_PUMP_PER_DAY, color='red', linestyle='--', alpha=0.4, label='Ngưỡng tối thiểu')
+
+        ax.xaxis.set_major_locator(ticker.MaxNLocator(nbins=15))
+        ax.set_title(f"BIỂU ĐỒ VỤ {i+1}: {vu['start']} ĐẾN {vu['end']}", fontsize=14, fontweight='bold', pad=20)
+        ax.set_ylabel("Số lần tưới")
+        ax.tick_params(axis='x', rotation=30)
+        ax.grid(axis='y', linestyle='--', alpha=0.3)
+        ax.legend()
+
+        if len(dates) < 45:
+            for bar in bars:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height + 0.2, f'{int(height)}',
+                        ha='center', va='bottom', fontsize=8, color='#444')
+
+    plt.tight_layout(pad=4.0)
+    st.pyplot(fig) # Hiển thị lên Streamlit
+
+def thuc_thi_tong_hop(data_lich):
+    stt_chuoi = str(KHU_VUC_ID)
     fmt = "%Y-%m-%d %H-%M-%S"
-    # Lọc đúng STT và sắp xếp thời gian
-    data_khu = sorted([d for d in all_data if str(d.get('STT')) == str(id_tuoi)],
-                      key=lambda x: datetime.strptime(x['Thời gian'], fmt))
+
+    # 1. Lọc lần tưới
+    du_lieu_khu = sorted([d for d in data_lich if d.get('STT') == stt_chuoi],
+                        key=lambda x: datetime.strptime(x['Thời gian'], fmt))
     
-    # 1. LOGIC ĐẾM LẦN TƯỚI CHUẨN (Khớp với biểu đồ)
-    daily_counts = {}
-    i = 0
-    while i < len(data_khu) - 1:
-        h1 = data_khu[i]
-        h2 = data_khu[i+1]
-        
-        # Chỉ đếm khi có cặp Bật -> Tắt
+    lan_tuoi_hop_le, daily_raw = [], {}
+
+    for i in range(len(du_lieu_khu) - 1):
+        h1, h2 = du_lieu_khu[i], du_lieu_khu[i+1]
         if h1.get('Trạng thái') == "Bật" and h2.get('Trạng thái') == "Tắt":
             t1 = datetime.strptime(h1['Thời gian'], fmt)
             t2 = datetime.strptime(h2['Thời gian'], fmt)
-            duration = (t2 - t1).total_seconds()
-            
-            # Chỉ đếm lần tưới thực sự (từ 20s đến 10 phút để loại nhiễu)
-            if 20 <= duration <= 600:
-                d_str = t1.date()
-                daily_counts[d_str] = daily_counts.get(d_str, 0) + 1
-                i += 2 # Nhảy qua cặp đã đếm
-                continue
-        i += 1
+            if (t2 - t1).total_seconds() >= MIN_DURATION_SECONDS:
+                lan_tuoi_hop_le.append(t1)
+                d_str = t1.strftime("%Y-%m-%d")
+                daily_raw[d_str] = daily_raw.get(d_str, 0) + 1
 
-    sorted_days = sorted(daily_counts.keys())
-    if not sorted_days: return []
-
-    # 2. TÁCH MÙA VỤ (Dựa trên khoảng nghỉ giữa các ngày tưới)
-    mua_vu_list = []
-    if sorted_days:
-        temp_vu = [sorted_days[0]]
-        for i in range(1, len(sorted_days)):
-            if (sorted_days[i] - sorted_days[i-1]).days >= gap_tach_vu:
-                mua_vu_list.append(temp_vu)
-                temp_vu = [sorted_days[i]]
-            else:
-                temp_vu.append(sorted_days[i])
-        mua_vu_list.append(temp_vu)
-
-    # 3. CHIA GIAI ĐOẠN (Gom nhóm ngày có tần suất tương đương)
-    final_report = []
-    for idx, ngay_trong_vu in enumerate(mua_vu_list):
-        phases = []
-        n = len(ngay_trong_vu)
-        curr_idx = 0
-        
-        while curr_idx < n:
-            start_day = ngay_trong_vu[curr_idx]
-            # Lấy giá trị mốc của ngày bắt đầu
-            ref_val = daily_counts[start_day]
-            
-            j = curr_idx + 1
-            while j < n:
-                val_j = daily_counts[ngay_trong_vu[j]]
-                # Nếu lệch quá ngưỡng và sự lệch này duy trì liên tiếp
-                if abs(val_j - ref_val) >= jump_threshold:
-                    # Kiểm tra xem có phải biến động nhất thời hay đổi giai đoạn thật
-                    sustain = True
-                    for k in range(j, min(j + sustain_days, n)):
-                        if abs(daily_counts[ngay_trong_vu[k]] - ref_val) < jump_threshold:
-                            sustain = False
-                            break
-                    if sustain: break 
-                j += 1
-            
-            # Chốt giai đoạn
-            group = ngay_trong_vu[curr_idx:j]
-            avg_v = sum(daily_counts[d] for d in group) / len(group)
-            phases.append({
-                "Từ": start_day,
-                "Đến": ngay_trong_vu[j-1],
-                "TB": round(avg_v, 1),
-                "Số ngày": len(group)
-            })
-            curr_idx = j
-            
-        final_report.append({"Tên": f"Mùa vụ {idx+1}", "GĐ": phases})
-    return final_report
-
-# --- GIAO DIỆN ---
-st.title("📊 Phân tích Mùa vụ & Giai đoạn (Số liệu Chuẩn)")
-files = st.sidebar.file_uploader("Nạp file JSON", accept_multiple_files=True)
-
-if files:
-    all_raw = []
-    for f in files:
-        all_raw.extend(json.load(f))
+    # 2. Phân vụ
+    ngay_hop_le = sorted([datetime.strptime(n, "%Y-%m-%d").date()
+                         for n, count in daily_raw.items() if count >= MIN_PUMP_PER_DAY])
     
-    with st.sidebar:
-        id_tuoi = st.selectbox("Chọn STT", ["2", "1"])
-        st.divider()
-        g_vu = st.slider("Ngày nghỉ tách vụ", 5, 20, 10)
-        g_jump = st.slider("Độ lệch tách GĐ", 2, 10, 4) # Tăng lên 4-5 để gộp tốt hơn
+    if not ngay_hop_le:
+        st.warning("Không tìm thấy dữ liệu thỏa mãn điều kiện.")
+        return
 
-    report = xu_ly_du_lieu_chuan(all_raw, id_tuoi, g_vu, g_jump)
+    danh_sach_vu = []
+    bat_dau = ngay_hop_le[0]
+    truoc_do = ngay_hop_le[0]
 
-    for vu in report:
-        with st.expander(f"📂 {vu['Tên']}: {vu['GĐ'][0]['Từ']} -> {vu['GĐ'][-1]['Đến']}", expanded=True):
-            txt = "| GĐ | Từ ngày | Đến ngày | Số ngày | Tần suất TB |\n|---|---|---|---|---|\n"
-            for i, g in enumerate(vu['GĐ']):
-                txt += f"| {i+1} | {g['Từ']} | {g['Đến']} | {g['Số ngày']} | {g['TB']} lần/ngày |\n"
-            st.markdown(txt)
+    # Hiển thị bảng kết quả thay cho lệnh print()
+    st.subheader(f"BÁO CÁO CHI TIẾT KHU {KHU_VUC_ID}")
+    
+    # Tạo header cho bảng
+    cols = st.columns([1, 2, 2, 1, 2])
+    cols[0].write("**STT**")
+    cols[1].write("**Bắt đầu**")
+    cols[2].write("**Kết thúc**")
+    cols[3].write("**Ngày**")
+    cols[4].write("**Tổng lần**")
+    st.divider()
+
+    def add_vu(stt, s, e):
+        dur = (e - s).days + 1
+        total = sum(1 for d in lan_tuoi_hop_le if s <= d.date() <= e)
+        
+        # Hiển thị dòng dữ liệu lên UI
+        c = st.columns([1, 2, 2, 1, 2])
+        c[0].write(stt)
+        c[1].write(str(s))
+        c[2].write(str(e))
+        c[3].write(dur)
+        c[4].write(total)
+        
+        stats = {d: daily_raw[d] for d in daily_raw if s <= datetime.strptime(d, "%Y-%m-%d").date() <= e}
+        return {'start': s, 'end': e, 'daily_stats': stats}
+
+    stt_vu = 1
+    for i in range(1, len(ngay_hop_le)):
+        if (ngay_hop_le[i] - truoc_do).days > MAX_GAP_DAYS:
+            if (truoc_do - bat_dau).days + 1 >= MIN_SEASON_DURATION:
+                danh_sach_vu.append(add_vu(stt_vu, bat_dau, truoc_do))
+                stt_vu += 1
+            bat_dau = ngay_hop_le[i]
+        truoc_do = ngay_hop_le[i]
+
+    # Vụ cuối
+    if (truoc_do - bat_dau).days + 1 >= MIN_SEASON_DURATION:
+        danh_sach_vu.append(add_vu(stt_vu, bat_dau, truoc_do))
+
+    st.write("") # Tạo khoảng cách
+    ve_bieu_do_thoang(danh_sach_vu)
+
+# Chạy chương trình
+if FILE_UPLOAD is not None:
+    data = json.load(FILE_UPLOAD)
+    thuc_thi_tong_hop(data)
+else:
+    st.info("Vui lòng tải file JSON lên để xem kết quả.")
