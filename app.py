@@ -3,7 +3,7 @@
     ngay_toi_thieu_gd = 3      # Giai đoạn phải >= 3 ngày mới được ngắt
     
     ngay_sap_xep = sorted(vu_hien_tai['daily_stats'].keys())
-    danh_sach_gd = []
+    danh_sach_gd = [] 
     
     if ngay_sap_xep:
         tap_hop_ngay = [ngay_sap_xep[0]]
