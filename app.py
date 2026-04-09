@@ -1,97 +1,97 @@
 import streamlit as st
 import json
 import pandas as pd
-import matplotlib.pyplot as plt
 from datetime import datetime
 
-# --- 1. CẤU HÌNH GIAO DIỆN ---
-st.set_page_config(page_title="Thử nghiệm Chia Giai đoạn EC", layout="wide")
+# --- CẤU HÌNH ---
+st.set_page_config(page_title="Lọc dữ liệu EC", layout="wide")
 
-st.markdown("""
-    <style>
-    .stApp { background-color: #ffffff; }
-    .main-title { color: #1a5c1a; text-align: center; font-weight: bold; border-bottom: 2px solid #2ca02c; padding-bottom: 10px; }
-    </style>
-    """, unsafe_allow_html=True)
-
-st.markdown("<h1 class='main-title'>HỆ THỐNG THỬ NGHIỆM CHIA GIAI ĐOẠN EC</h1>", unsafe_allow_html=True)
-
-# --- 2. LOGIC PHÂN TÍCH ---
-def process_data(data, mode, khu_id, cp_id, freq_threshold=3):
+def get_data_seasons(cp_data, mode, freq_threshold=3):
     fmt = "%Y-%m-%d %H-%M-%S"
-    # Lọc dữ liệu máy châm phân
-    cp = sorted([d for d in data if str(d.get('STT')) == str(cp_id)], 
-                key=lambda x: datetime.strptime(x['Thời gian'], fmt))
+    if not cp_data: return []
     
-    if not cp: return []
-
-    # Gom nhóm theo ngày để tính tần suất tưới
+    # Sắp xếp theo thời gian
+    cp_data = sorted(cp_data, key=lambda x: datetime.strptime(x['Thời gian'], fmt))
+    
+    # Tính tần suất tưới theo ngày cho chế độ "Lịch tưới"
     daily_counts = {}
-    for d in cp:
+    for d in cp_data:
         dt = datetime.strptime(d['Thời gian'], fmt).date()
         daily_counts[dt] = daily_counts.get(dt, 0) + 1
 
     seasons = []
-    current_group = [cp[0]]
+    current_batch = [cp_data[0]]
 
-    for i in range(1, len(cp)):
-        prev, curr = cp[i-1], cp[i]
-        t_prev = datetime.strptime(prev['Thời gian'], fmt)
-        t_curr = datetime.strptime(curr['Thời gian'], fmt)
+    for i in range(1, len(cp_data)):
+        prev, curr = cp_data[i-1], cp_data[i]
+        t_p = datetime.strptime(prev['Thời gian'], fmt)
+        t_c = datetime.strptime(curr['Thời gian'], fmt)
+        
         is_break = False
-
-        # --- CÁCH 1: BIẾN ĐỘNG TẦN SUẤT ---
+        
+        # 1. Lọc theo Biến động tần suất (Thay đổi số lần tưới/ngày)
         if mode == "Biến động Tần suất":
-            c_prev = daily_counts.get(t_prev.date(), 0)
-            c_curr = daily_counts.get(t_curr.date(), 0)
-            if abs(c_curr - c_prev) >= freq_threshold or (t_curr - t_prev).days > 2:
+            if abs(daily_counts[t_c.date()] - daily_counts[t_p.date()]) >= freq_threshold:
                 is_break = True
-
-        # --- CÁCH 2: EC KẾ HOẠCH ---
+            elif (t_c - t_p).days > 2: # Vẫn giữ điều kiện ngắt mùa vụ cơ bản
+                is_break = True
+                
+        # 2. Lọc theo EC Kế hoạch (Thay đổi con số cài đặt)
         elif mode == "EC Kế hoạch":
             if curr.get("EC yêu cầu") != prev.get("EC yêu cầu"):
                 is_break = True
-
-        # --- CÁCH 3: EC THỰC TẾ ---
+                
+        # 3. Lọc theo EC Thực tế (Biến động TBEC > 30 đơn vị)
         elif mode == "EC Thực tế":
             if abs(float(curr.get("TBEC", 0)) - float(prev.get("TBEC", 0))) > 30:
                 is_break = True
 
         if is_break:
-            seasons.append(current_group)
-            current_group = [curr]
+            seasons.append(current_batch)
+            current_batch = [curr]
         else:
-            current_group.append(curr)
-    
-    seasons.append(current_group)
+            current_batch.append(curr)
+            
+    seasons.append(current_batch)
     return seasons
 
-# --- 3. HIỂN THỊ ---
-uploaded_files = st.sidebar.file_uploader("Tải file JSON", type=["json"], accept_multiple_files=True)
+# --- GIAO DIỆN ---
+uploaded = st.sidebar.file_uploader("Tải file JSON", type=["json"])
 
-if uploaded_files:
-    all_data = []
-    for f in uploaded_files:
-        content = json.load(f)
-        all_data.extend(content) if isinstance(content, list) else all_data.append(content)
-
-    with st.sidebar:
-        st.divider()
-        mode = st.radio("Chọn logic chia giai đoạn:", ["Biến động Tần suất", "EC Kế hoạch", "EC Thực tế"])
-        ids = sorted(list(set(str(d['STT']) for d in all_data if 'STT' in d)))
-        cp_id = st.selectbox("Chọn STT Máy châm phân", ids, index=0)
-        st.divider()
-        st.caption("Cài đặt ngưỡng ngắt (cho Tần suất)")
-        threshold = st.slider("Độ lệch lần tưới/ngày", 1, 10, 3)
-
-    seasons_data = process_data(all_data, mode, None, cp_id, threshold)
-
-    for idx, group in enumerate(seasons_data):
-        start_t = group[0]['Thời gian']
-        end_t = group[-1]['Thời gian']
+if uploaded:
+    raw = json.load(uploaded)
+    data = raw if isinstance(raw, list) else [raw]
+    
+    st.sidebar.divider()
+    mode = st.sidebar.selectbox("Cách chia giai đoạn", ["Biến động Tần suất", "EC Kế hoạch", "EC Thực tế"])
+    ids = sorted(list(set(str(d['STT']) for d in data if 'STT' in d)))
+    selected_id = st.sidebar.selectbox("Chọn STT thiết bị", ids)
+    
+    # Lọc dữ liệu theo STT đã chọn
+    filtered_data = [d for d in data if str(d.get('STT')) == selected_id]
+    
+    if filtered_data:
+        results = get_data_seasons(filtered_data, mode)
         
-        real_vals = [float(d.get('TBEC', 0)) for d in group]
-        target_vals = [float(d.get('EC yêu cầu', 0)) for d in group]
-        
-        avg_r = sum(real_vals)/len(real_vals)
-        avg_t = sum(target_vals)/len(
+        summary_table = []
+        for idx, group in enumerate(results):
+            reals = [float(d.get('TBEC', 0)) for d in group]
+            targets = [float(d.get('EC yêu cầu', 0)) for d in group]
+            
+            avg_r = sum(reals)/len(reals)
+            avg_t = sum(targets)/len(targets)
+            
+            summary_table.append({
+                "Giai đoạn": idx + 1,
+                "Bắt đầu": group[0]['Thời gian'],
+                "Kết thúc": group[-1]['Thời gian'],
+                "Số bản ghi": len(group),
+                "EC Yêu cầu (TB)": round(avg_t, 1),
+                "TBEC Thực tế (TB)": round(avg_r, 1),
+                "Độ lệch (%)": f"{round(((avg_r - avg_t)/avg_t*100), 1)}%" if avg_t > 0 else "0%"
+            })
+            
+        st.subheader(f"Bảng tổng hợp: Chia theo {mode}")
+        st.table(pd.DataFrame(summary_table))
+    else:
+        st.warning("Không tìm thấy dữ liệu cho STT này.")
