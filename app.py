@@ -17,7 +17,7 @@ st.title("💧 Hệ Thống Phân Tích Mùa Vụ")
 # Sidebar
 st.sidebar.header("📁 Quản lý dữ liệu")
 FILES_UPLOAD = st.sidebar.file_uploader("Tải lên các file JSON", type=['json'], accept_multiple_files=True)
-KHU_VUC_ID_INPUT = st.sidebar.number_input("ID Khu Vực cần phân tích", value=2)
+KHU_VUC_ID_INPUT = st.sidebar.number_input("ID Khu Vực cần phân tích chi tiết", value=2)
 
 def ve_bieu_do_don(vu_chon, stt_vu):
     """Vẽ biểu đồ cho vụ được chọn"""
@@ -47,7 +47,24 @@ def thuc_thi_tong_hop(data_tong_hop):
     stt_chuoi = str(KHU_VUC_ID_INPUT)
     fmt = "%Y-%m-%d %H-%M-%S"
 
-    # 1. Lọc và làm sạch dữ liệu
+    # --- PHẦN THÔNG BÁO QUÉT KHU VỰC ---
+    # Tìm tất cả các STT (ID Khu vực) duy nhất có trong dữ liệu
+    tat_ca_khu = {}
+    for d in data_tong_hop:
+        stt = d.get('STT')
+        if stt:
+            tat_ca_khu[stt] = tat_ca_khu.get(stt, 0) + 1
+    
+    # Hiển thị thông tin quét được lên giao diện chính
+    st.subheader("🔍 Kết quả quét dữ liệu")
+    col_info1, col_info2 = st.columns([1, 3])
+    col_info1.metric("Số khu vực tìm thấy", len(tat_ca_khu))
+    
+    danh_sach_khu_str = ", ".join([f"Khu {k} ({v} bản ghi)" for k, v in sorted(tat_ca_khu.items())])
+    st.write(f"**Chi tiết các khu đã quét:** {danh_sach_khu_str}")
+    st.divider()
+
+    # 1. Lọc và làm sạch dữ liệu khu vực đã chọn
     du_lieu_khu = sorted([d for d in data_tong_hop if d.get('STT') == stt_chuoi],
                         key=lambda x: datetime.strptime(x['Thời gian'], fmt))
     
@@ -72,7 +89,7 @@ def thuc_thi_tong_hop(data_tong_hop):
                          for n, info in daily_details.items() if info['count'] >= MIN_PUMP_PER_DAY])
     
     if not ngay_hop_le:
-        st.warning(f"⚠️ Không tìm thấy dữ liệu đạt chuẩn cho Khu {KHU_VUC_ID_INPUT}")
+        st.warning(f"⚠️ Khu {KHU_VUC_ID_INPUT} không có đủ dữ liệu đạt chuẩn (>=20s và >=5 lần/ngày). Hãy kiểm tra ID Khu vực khác.")
         return
 
     danh_sach_vu = []
@@ -95,11 +112,11 @@ def thuc_thi_tong_hop(data_tong_hop):
         danh_sach_vu.append(get_vu_data(bat_dau, truoc_do))
 
     if not danh_sach_vu:
-        st.warning("⚠️ Không có vụ nào đủ độ dài tối thiểu 7 ngày.")
+        st.warning(f"⚠️ Khu {KHU_VUC_ID_INPUT} có dữ liệu nhưng không tạo thành vụ nào đủ 7 ngày.")
         return
 
     # --- GIAO DIỆN CHỌN VỤ ---
-    st.subheader(f"📊 Kết quả phân tích Khu {KHU_VUC_ID_INPUT}")
+    st.subheader(f"📊 Phân tích mùa vụ Khu {KHU_VUC_ID_INPUT}")
     options = [f"Vụ {i+1}: {v['start']} -> {v['end']}" for i, v in enumerate(danh_sach_vu)]
     selection = st.selectbox("Chọn mùa vụ để xem chi tiết:", options)
     
@@ -109,7 +126,7 @@ def thuc_thi_tong_hop(data_tong_hop):
     ve_bieu_do_don(vu_hien_tai, index_chon + 1)
 
     st.markdown(f"#### 📅 Bảng kê chi tiết - Vụ {index_chon + 1}")
-    st.info(f"📋 **TỔNG KẾT VỤ:** Kéo dài **{vu_hien_tai['duration']} ngày** | Tổng cộng **{vu_hien_tai['total_pumps']} lần tưới** hoàn chỉnh (>=20s)")
+    st.info(f"📋 **TỔNG KẾT VỤ:** Kéo dài **{vu_hien_tai['duration']} ngày** | Tổng cộng **{vu_hien_tai['total_pumps']} lần tưới** đạt chuẩn")
 
     c1, c2, c3 = st.columns([2, 2, 3])
     c1.write("**Ngày**")
@@ -128,21 +145,17 @@ def thuc_thi_tong_hop(data_tong_hop):
         r2.write(f"✅ {info['count']} lần")
         r3.write(f"⏱️ {mins} phút {secs} giây")
 
-# --- XỬ LÝ NHIỀU FILE VÀ BỘ CHỌN THỦ CÔNG ---
+# --- XỬ LÝ FILE ---
 if FILES_UPLOAD:
     st.sidebar.markdown("---")
     st.sidebar.subheader("🎯 Chọn file để quét")
-    
     selected_files_data = []
-    # Hiển thị checkbox cho từng file đã upload
     for f in FILES_UPLOAD:
-        is_selected = st.sidebar.checkbox(f"Sử dụng: {f.name}", value=True, key=f.name)
-        if is_selected:
+        if st.sidebar.checkbox(f"Sử dụng: {f.name}", value=True, key=f.name):
             selected_files_data.append(f)
     
     data_tong_hop = []
     for uploaded_file in selected_files_data:
-        # Load dữ liệu từng file được chọn
         content = json.load(uploaded_file)
         if isinstance(content, list):
             data_tong_hop.extend(content)
@@ -150,6 +163,6 @@ if FILES_UPLOAD:
     if data_tong_hop:
         thuc_thi_tong_hop(data_tong_hop)
     else:
-        st.warning("Vui lòng tích chọn ít nhất một file ở thanh bên để bắt đầu phân tích.")
+        st.warning("Vui lòng tích chọn ít nhất một file.")
 else:
-    st.info("👋 Chào mừng! Hãy tải các file JSON lên và chọn file cần quét ở thanh bên trái.")
+    st.info("👋 Hãy tải các file JSON lên để bắt đầu.")
