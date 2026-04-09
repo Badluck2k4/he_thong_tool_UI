@@ -52,13 +52,10 @@ def analyze_data(data, khu_id, cham_phan_id, min_sec, min_freq):
     if not ngay_hop_le: return []
 
     seasons = []
-    if not ngay_hop_le: return seasons
-    
     start_date = prev_date = ngay_hop_le[0]
     for i in range(1, len(ngay_hop_le)):
         if (ngay_hop_le[i] - prev_date).days > 2:
             if (prev_date - start_date).days + 1 >= 7:
-                # Tính EC/pH trung bình trong khoảng thời gian vụ này
                 ec_vals = [float(d['EC']) for d in du_lieu_cp if 'EC' in d and start_date <= datetime.strptime(d['Thời gian'], fmt).date() <= prev_date]
                 ph_vals = [float(d['pH']) for d in du_lieu_cp if 'pH' in d and start_date <= datetime.strptime(d['Thời gian'], fmt).date() <= prev_date]
                 
@@ -87,14 +84,23 @@ def analyze_data(data, khu_id, cham_phan_id, min_sec, min_freq):
 # --- 3. GIAO DIỆN ---
 st.markdown("<h1 class='main-title'>DASHBOARD QUẢN LÝ TƯỚI & CHÂM PHÂN</h1>", unsafe_allow_html=True)
 
-st.sidebar.header("📁 Cấu hình hệ thống")
-uploaded_file = st.sidebar.file_uploader("Tải file dữ liệu tổng (.json)", type=["json"])
+st.sidebar.header("📁 Dữ liệu đầu vào")
+# Thay đổi: accept_multiple_files=True
+uploaded_files = st.sidebar.file_uploader("Tải (các) file JSON dữ liệu", type=["json"], accept_multiple_files=True)
 
-if uploaded_file:
-    data = json.load(uploaded_file)
+if uploaded_files:
+    data = []
+    # Gộp tất cả dữ liệu từ các file được chọn
+    for f in uploaded_files:
+        file_data = json.load(f)
+        if isinstance(file_data, list):
+            data.extend(file_data)
+        else:
+            data.append(file_data)
+            
     with st.sidebar:
         st.divider()
-        all_stt = sorted(list(set(str(d['STT']) for d in data)))
+        all_stt = sorted(list(set(str(d['STT']) for d in data if 'STT' in d)))
         khu_val = st.selectbox("STT Khu vực tưới", all_stt, index=0)
         cp_val = st.selectbox("STT Máy châm phân", all_stt, index=min(1, len(all_stt)-1))
         st.divider()
@@ -122,6 +128,6 @@ if uploaded_file:
             st.pyplot(fig)
             st.divider()
     else:
-        st.warning("Không tìm thấy dữ liệu phù hợp.")
+        st.warning("Không tìm thấy dữ liệu phù hợp trong các file đã tải.")
 else:
-    st.info("Vui lòng tải file JSON để xem báo cáo EC/pH và lịch tưới.")
+    st.info("Nhấn 'Browse files' và chọn đồng thời các file JSON (giữ phím Ctrl hoặc kéo chuột chọn nhiều file).")
