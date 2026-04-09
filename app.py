@@ -101,4 +101,11 @@ if uploaded_file is not None:
         cols = st.columns(len(results))
         for idx, v in enumerate(results):
             with cols[idx]:
-                st.metric(label=f"VỤ {idx+1}",
+                # Hiển thị tóm tắt các vụ (Stat Cards)
+        st.subheader("📌 Tóm tắt các mùa vụ")
+        cols = st.columns(len(results))
+        for idx, v in enumerate(results):
+            with cols[idx]:
+                # Đảm bảo đóng đủ dấu ngoặc đơn ) ở cuối dòng này
+                st.metric(label=f"VỤ {idx+1}", value=f"{v['total']} lần", delta=f"{v['days']} ngày")
+                st.caption(f"Từ {v['start']} đến {v['end']}")
