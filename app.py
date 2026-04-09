@@ -4,23 +4,24 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from datetime import datetime
 
+# --- CẤU HÌNH CỐ ĐỊNH (Giá trị mặc định bên trong code) ---
+KHU_VUC_ID = 2
+MIN_DURATION_SECONDS = 20
+MIN_PUMP_PER_DAY = 5
+MAX_GAP_DAYS = 2
+MIN_SEASON_DURATION = 7
+
 # --- CẤU HÌNH GIAO DIỆN ---
 st.set_page_config(page_title="Phân tích tưới nhỏ giọt", layout="wide")
 st.title("💧 Hệ Thống Phân Tích Mùa Vụ")
 
-# Sidebar - Thiết lập các giá trị mặc định theo hình ảnh của bạn
-st.sidebar.header("Cấu hình bộ lọc")
+# Sidebar chỉ giữ lại phần upload file và chọn ID khu vực
+st.sidebar.header("Dữ liệu đầu vào")
 FILE_UPLOAD = st.sidebar.file_uploader("Chọn file 'Lich nho giotj.json'", type=['json'])
-KHU_VUC_ID = st.sidebar.number_input("ID Khu Vực", value=2)
-
-# Điều chỉnh các giá trị mặc định (default) tại đây:
-MIN_DURATION_SECONDS = st.sidebar.slider("Thời gian tưới tối thiểu (giây)", 0, 100, 20)
-MIN_PUMP_PER_DAY = st.sidebar.slider("Số lần tưới tối thiểu/ngày", 0, 50, 5)
-MAX_GAP_DAYS = st.sidebar.slider("Khoảng cách ngày tối đa", 0, 10, 2)
-MIN_SEASON_DURATION = st.sidebar.slider("Thời lượng vụ tối thiểu (ngày)", 0, 30, 7)
+KHU_VUC_ID_INPUT = st.sidebar.number_input("ID Khu Vực cần phân tích", value=KHU_VUC_ID)
 
 def ve_bieu_do_thoang(danh_sach_vu):
-    """Giữ nguyên hàm vẽ biểu đồ gốc"""
+    """Giữ nguyên hàm vẽ biểu đồ của bạn"""
     num_seasons = len(danh_sach_vu)
     if num_seasons == 0: return
 
@@ -53,8 +54,8 @@ def ve_bieu_do_thoang(danh_sach_vu):
     st.pyplot(fig)
 
 def thuc_thi_tong_hop(data_lich):
-    """Giữ nguyên logic gốc"""
-    stt_chuoi = str(KHU_VUC_ID)
+    """Sử dụng các thông số mặc định đã khai báo ở đầu code"""
+    stt_chuoi = str(KHU_VUC_ID_INPUT)
     fmt = "%Y-%m-%d %H-%M-%S"
 
     # 1. Lọc lần tưới
@@ -78,16 +79,16 @@ def thuc_thi_tong_hop(data_lich):
                          for n, count in daily_raw.items() if count >= MIN_PUMP_PER_DAY])
     
     if not ngay_hop_le:
-        st.warning("Không tìm thấy dữ liệu thỏa mãn điều kiện.")
+        st.warning(f"Không tìm thấy dữ liệu cho Khu {KHU_VUC_ID_INPUT} thỏa mãn điều kiện.")
         return
 
     danh_sach_vu = []
     bat_dau = ngay_hop_le[0]
     truoc_do = ngay_hop_le[0]
 
-    st.subheader(f"BÁO CÁO CHI TIẾT KHU {KHU_VUC_ID}")
+    st.subheader(f"BÁO CÁO CHI TIẾT KHU {KHU_VUC_ID_INPUT}")
     
-    # Hiển thị tiêu đề bảng
+    # Bảng hiển thị kết quả
     cols = st.columns([1, 2, 2, 1, 2])
     cols[0].write("**STT**")
     cols[1].write("**Bắt đầu**")
@@ -130,4 +131,4 @@ if FILE_UPLOAD is not None:
     data = json.load(FILE_UPLOAD)
     thuc_thi_tong_hop(data)
 else:
-    st.info("👋 Chào bạn! Hãy tải file JSON lên để bắt đầu phân tích.")
+    st.info("👋 Hãy tải file JSON lên để xem báo cáo.")
