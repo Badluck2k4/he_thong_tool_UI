@@ -17,15 +17,23 @@ MAX_GIAI_DOAN = 15
 
 st.set_page_config(page_title="Dashboard Phân Tích Tưới", layout="wide")
 
-# --- 2. CSS TỐI ƯU (ĐÃ LOẠI BỎ CÁC TÙY CHỈNH GÂY LỖI MÀU CHỮ) ---
+# --- 2. CSS ĐẶC TRỊ LỖI CHỮ ĐEN (DÙNG !IMPORTANT) ---
 st.markdown("""
     <style>
-    /* Chỉ bo góc và tạo viền nhẹ cho ô chỉ số, không can thiệp màu chữ */
+    /* Ép màu chữ của Metric phải hiển thị rõ ràng */
+    [data-testid="stMetricValue"] {
+        color: #FFFFFF !important; /* Màu trắng cho số */
+        font-weight: bold !important;
+    }
+    [data-testid="stMetricLabel"] {
+        color: #A0A0A0 !important; /* Màu xám nhạt cho chữ tiêu đề nhỏ */
+    }
+    /* Tạo khung nhìn chuyên nghiệp cho ô chỉ số */
     div[data-testid="stMetric"] {
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        padding: 10px;
-        border-radius: 10px;
-        background-color: rgba(255, 255, 255, 0.05);
+        background-color: rgba(255, 255, 255, 0.1) !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        padding: 15px !important;
+        border-radius: 12px !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -39,29 +47,21 @@ FILES_UPLOAD = st.sidebar.file_uploader("Tải lên các file JSON", type=['json
 def ve_bieu_do_ngang(du_lieu_bieu_do, tieu_de):
     dates = sorted(du_lieu_bieu_do.keys(), reverse=True) 
     counts = [du_lieu_bieu_do[d]['count'] for d in dates]
-    
     chart_height = min(10, max(4, len(dates) * 0.35))
     fig, ax = plt.subplots(figsize=(8, chart_height))
     
-    # Giữ nguyên màu xanh lá và đường đỏ như cũ
     ax.barh(dates, counts, color='#4CAF50', alpha=0.9)
     ax.axvline(x=MIN_PUMP_PER_DAY, color='#FF5252', linestyle='--', alpha=0.7)
     
-    # Tự động điều chỉnh màu chữ nhãn theo giao diện
-    is_dark = st.get_option("theme.base") == "dark"
-    label_color = 'white' if is_dark else 'black'
-    
+    label_color = 'white'
     ax.set_title(tieu_de, fontsize=10, fontweight='bold', color=label_color)
     ax.tick_params(axis='both', which='major', labelsize=9, colors=label_color)
     
-    # Làm trong suốt nền để không bị các ô trắng đè lên
     fig.patch.set_alpha(0.0)
     ax.patch.set_alpha(0.0)
-    
     for spine in ax.spines.values():
         spine.set_edgecolor(label_color)
         spine.set_alpha(0.3)
-        
     plt.tight_layout()
     st.pyplot(fig)
 
@@ -154,12 +154,11 @@ def thuc_thi_tong_hop(data_tong_hop, kv_input_id):
 
     with col_trai:
         st.subheader(tieu_de)
-        # 2 Ô CHỈ SỐ: Đã sửa để nhìn được chữ
+        # Chỉ số: Dùng !important để ép màu trắng
         m1, m2 = st.columns(2)
         m1.metric("Số ngày trong kỳ", f"{len(du_lieu)} ngày")
         m2.metric("Tổng lần tưới", f"{sum(i['count'] for i in du_lieu.values())} lần")
         
-        # BIỂU ĐỒ: Giữ nguyên như cũ
         ve_bieu_do_ngang(du_lieu, "Phân bố tần suất tưới")
 
     with col_phai:
