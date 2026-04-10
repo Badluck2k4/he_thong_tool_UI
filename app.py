@@ -17,18 +17,16 @@ MAX_GIAI_DOAN = 15
 
 st.set_page_config(page_title="Dashboard Phân Tích Tưới", layout="wide")
 
-# --- 2. CSS ĐẶC TRỊ LỖI CHỮ ĐEN (DÙNG !IMPORTANT) ---
+# --- 2. CSS ĐẶC TRỊ LỖI HIỂN THỊ CHỈ SỐ ---
 st.markdown("""
     <style>
-    /* Ép màu chữ của Metric phải hiển thị rõ ràng */
     [data-testid="stMetricValue"] {
-        color: #FFFFFF !important; /* Màu trắng cho số */
+        color: #FFFFFF !important;
         font-weight: bold !important;
     }
     [data-testid="stMetricLabel"] {
-        color: #A0A0A0 !important; /* Màu xám nhạt cho chữ tiêu đề nhỏ */
+        color: #A0A0A0 !important;
     }
-    /* Tạo khung nhìn chuyên nghiệp cho ô chỉ số */
     div[data-testid="stMetric"] {
         background-color: rgba(255, 255, 255, 0.1) !important;
         border: 1px solid rgba(255, 255, 255, 0.2) !important;
@@ -45,23 +43,33 @@ st.sidebar.header("📁 Quản lý dữ liệu")
 FILES_UPLOAD = st.sidebar.file_uploader("Tải lên các file JSON", type=['json'], accept_multiple_files=True)
 
 def ve_bieu_do_ngang(du_lieu_bieu_do, tieu_de):
+    """Vẽ biểu đồ với nền trắng và chữ đen"""
     dates = sorted(du_lieu_bieu_do.keys(), reverse=True) 
     counts = [du_lieu_bieu_do[d]['count'] for d in dates]
     chart_height = min(10, max(4, len(dates) * 0.35))
+    
+    # Tạo figure
     fig, ax = plt.subplots(figsize=(8, chart_height))
     
-    ax.barh(dates, counts, color='#4CAF50', alpha=0.9)
-    ax.axvline(x=MIN_PUMP_PER_DAY, color='#FF5252', linestyle='--', alpha=0.7)
+    # ÉP NỀN TRẮNG
+    fig.patch.set_facecolor('white')
+    ax.set_facecolor('white')
     
-    label_color = 'white'
-    ax.set_title(tieu_de, fontsize=10, fontweight='bold', color=label_color)
-    ax.tick_params(axis='both', which='major', labelsize=9, colors=label_color)
+    # Vẽ cột dữ liệu
+    ax.barh(dates, counts, color='#2E7D32', alpha=0.9) # Xanh lá đậm cho rõ trên nền trắng
+    ax.axvline(x=MIN_PUMP_PER_DAY, color='#D32F2F', linestyle='--', linewidth=1.5, label='Ngưỡng chuẩn')
     
-    fig.patch.set_alpha(0.0)
-    ax.patch.set_alpha(0.0)
+    # ÉP CHỮ MÀU ĐEN (Để đọc được trên nền trắng)
+    ax.set_title(tieu_de, fontsize=10, fontweight='bold', color='black')
+    ax.tick_params(axis='both', which='major', labelsize=9, colors='black')
+    
+    # Viền biểu đồ màu xám đậm
     for spine in ax.spines.values():
-        spine.set_edgecolor(label_color)
-        spine.set_alpha(0.3)
+        spine.set_edgecolor('#333333')
+        spine.set_visible(True)
+        
+    ax.grid(axis='x', linestyle=':', alpha=0.3, color='black') # Thêm lưới dọc cho dễ nhìn
+    
     plt.tight_layout()
     st.pyplot(fig)
 
@@ -154,11 +162,11 @@ def thuc_thi_tong_hop(data_tong_hop, kv_input_id):
 
     with col_trai:
         st.subheader(tieu_de)
-        # Chỉ số: Dùng !important để ép màu trắng
         m1, m2 = st.columns(2)
         m1.metric("Số ngày trong kỳ", f"{len(du_lieu)} ngày")
         m2.metric("Tổng lần tưới", f"{sum(i['count'] for i in du_lieu.values())} lần")
         
+        # Gọi hàm vẽ biểu đồ nền trắng
         ve_bieu_do_ngang(du_lieu, "Phân bố tần suất tưới")
 
     with col_phai:
