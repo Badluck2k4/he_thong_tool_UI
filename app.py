@@ -17,12 +17,14 @@ MAX_GIAI_DOAN = 15
 
 st.set_page_config(page_title="Dashboard Phân Tích Tưới", layout="wide")
 
-# CSS để tùy chỉnh bảng và thu nhỏ biểu đồ
+# --- CSS TỐI ƯU (ĐÃ XÓA PHẦN GÂY LỖI TRẮNG Ô) ---
 st.markdown("""
     <style>
-    .main { background-color: #f5f7f9; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    div[data-testid="stExpander"] { border: none !important; box-shadow: none !important; }
+    .stMetric { 
+        border: 1px solid #464b5d; 
+        padding: 10px; 
+        border-radius: 5px; 
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -33,61 +35,46 @@ st.sidebar.header("📁 Quản lý dữ liệu")
 FILES_UPLOAD = st.sidebar.file_uploader("Tải lên các file JSON", type=['json'], accept_multiple_files=True)
 
 def ve_bieu_do_ngang(du_lieu_bieu_do, tieu_de):
-    """Vẽ biểu đồ với kích thước tối ưu hơn"""
     dates = sorted(du_lieu_bieu_do.keys(), reverse=True) 
     counts = [du_lieu_bieu_do[d]['count'] for d in dates]
-    
-    # Giới hạn chiều cao tối đa để không choáng chỗ
     chart_height = min(10, max(4, len(dates) * 0.35))
     fig, ax = plt.subplots(figsize=(8, chart_height))
-    
-    bars = ax.barh(dates, counts, color='#2ca02c', alpha=0.8)
-    ax.axvline(x=MIN_PUMP_PER_DAY, color='red', linestyle='--', alpha=0.5)
-    ax.set_title(tieu_de, fontsize=10, fontweight='bold')
+    # Điều chỉnh màu sắc cho biểu đồ để hợp với nền tối
+    ax.barh(dates, counts, color='#4CAF50', alpha=0.9)
+    ax.axvline(x=MIN_PUMP_PER_DAY, color='#FF5252', linestyle='--', alpha=0.7)
+    ax.set_title(tieu_de, fontsize=10, fontweight='bold', color='white' if st.get_option("theme.base") == "dark" else 'black')
     ax.tick_params(axis='both', which='major', labelsize=9)
-    
+    # Trong suốt nền biểu đồ
+    fig.patch.set_alpha(0.0)
+    ax.patch.set_alpha(0.0)
     plt.tight_layout()
     st.pyplot(fig)
 
 def thuc_thi_chia_giai_doan(ngay_sap_xep, daily_stats):
     danh_sach_gd = []
     if not ngay_sap_xep: return danh_sach_gd
-
     tap_hop_ngay = [ngay_sap_xep[0]]
     for i in range(1, len(ngay_sap_xep)):
         ngay_hien_tai = ngay_sap_xep[i]
         so_lan_hien_tai = daily_stats[ngay_hien_tai]['count']
         trung_binh_gd = sum(daily_stats[d]['count'] for d in tap_hop_ngay) / len(tap_hop_ngay)
-        
         if abs(so_lan_hien_tai - trung_binh_gd) > NGUONG_BIEN_DONG_TINH and len(tap_hop_ngay) >= NGAY_TOI_THIEU_GD:
             danh_sach_gd.append(tap_hop_ngay)
             tap_hop_ngay = [ngay_hien_tai]
-        else:
-            tap_hop_ngay.append(ngay_hien_tai)
-    
+        else: tap_hop_ngay.append(ngay_hien_tai)
     if tap_hop_ngay: danh_sach_gd.append(tap_hop_ngay)
-
     while len(danh_sach_gd) > MAX_GIAI_DOAN:
         idx_min = 0
         m_len = len(danh_sach_gd[0])
         for idx, g in enumerate(danh_sach_gd):
             if len(g) < m_len: m_len = len(g); idx_min = idx
-        if idx_min > 0:
-            danh_sach_gd[idx_min-1].extend(danh_sach_gd.pop(idx_min))
-        else:
-            danh_sach_gd[idx_min].extend(danh_sach_gd.pop(idx_min + 1))
+        if idx_min > 0: danh_sach_gd[idx_min-1].extend(danh_sach_gd.pop(idx_min))
+        else: danh_sach_gd[idx_min].extend(danh_sach_gd.pop(idx_min + 1))
     return danh_sach_gd
 
 def hien_thi_bang_du_lieu(du_lieu_hien_thi):
-    """Hiển thị bảng thông tin dạng gọn gàng"""
     st.markdown("**📅 Chi tiết từng ngày**")
-    # Sử dụng HTML/CSS để tạo bảng có thanh cuộn nếu quá dài
-    head_cols = st.columns([1.5, 1, 1.5])
-    head_cols[0].write("**Ngày**")
-    head_cols[1].write("**Lần**")
-    head_cols[2].write("**Thời gian**")
-    st.divider()
-    
+    st.write("---")
     for ngay in sorted(du_lieu_hien_thi.keys(), reverse=True):
         info = du_lieu_hien_thi[ngay]
         r = st.columns([1.5, 1, 1.5])
@@ -98,12 +85,9 @@ def hien_thi_bang_du_lieu(du_lieu_hien_thi):
 def thuc_thi_tong_hop(data_tong_hop, kv_input_id):
     stt_chuoi = str(kv_input_id)
     fmt = "%Y-%m-%d %H-%M-%S"
-
-    # Lọc dữ liệu gốc
     daily_details = {} 
     du_lieu_khu = sorted([d for d in data_tong_hop if d.get('STT') == stt_chuoi],
                         key=lambda x: datetime.strptime(x['Thời gian'], fmt))
-    
     for i in range(len(du_lieu_khu) - 1):
         h1, h2 = du_lieu_khu[i], du_lieu_khu[i+1]
         if h1.get('Trạng thái') == "Bật" and h2.get('Trạng thái') == "Tắt":
@@ -116,77 +100,62 @@ def thuc_thi_tong_hop(data_tong_hop, kv_input_id):
                     daily_details[d_str]['count'] += 1
                     daily_details[d_str]['total_time'] += dur
             except: continue
-
     ngay_hop_le = sorted([datetime.strptime(n, "%Y-%m-%d").date() for n, info in daily_details.items() 
                          if MIN_PUMP_PER_DAY <= info['count'] <= SO_LAN_TOI_DA_NGAY])
-    
     if not ngay_hop_le:
         st.warning("Không có dữ liệu hợp lệ."); return
-
     danh_sach_vu = []
     b_idx = 0
     for i in range(1, len(ngay_hop_le)):
         if (ngay_hop_le[i] - ngay_hop_le[i-1]).days > MAX_GAP_DAYS:
             if (ngay_hop_le[i-1] - ngay_hop_le[b_idx]).days + 1 >= MIN_SEASON_DURATION:
-                stats = {n.strftime("%Y-%m-%d"): daily_details[n.strftime("%Y-%m-%d")] 
-                         for n in ngay_hop_le[b_idx:i]}
-                danh_sach_vu.append({'start': ngay_hop_le[b_idx], 'end': ngay_hop_le[i-1], 
-                                    'duration': (ngay_hop_le[i-1]-ngay_hop_le[b_idx]).days + 1, 'daily_stats': stats})
+                stats = {n.strftime("%Y-%m-%d"): daily_details[n.strftime("%Y-%m-%d")] for n in ngay_hop_le[b_idx:i]}
+                danh_sach_vu.append({'start': ngay_hop_le[b_idx], 'end': ngay_hop_le[i-1], 'duration': (ngay_hop_le[i-1]-ngay_hop_le[b_idx]).days+1, 'daily_stats': stats})
             b_idx = i
-    # Vụ cuối
     if (ngay_hop_le[-1] - ngay_hop_le[b_idx]).days + 1 >= MIN_SEASON_DURATION:
         stats = {n.strftime("%Y-%m-%d"): daily_details[n.strftime("%Y-%m-%d")] for n in ngay_hop_le[b_idx:]}
-        danh_sach_vu.append({'start': ngay_hop_le[b_idx], 'end': ngay_hop_le[-1], 
-                            'duration': (ngay_hop_le[-1]-ngay_hop_le[b_idx]).days+1, 'daily_stats': stats})
+        danh_sach_vu.append({'start': ngay_hop_le[b_idx], 'end': ngay_hop_le[-1], 'duration': (ngay_hop_le[-1]-ngay_hop_le[b_idx]).days+1, 'daily_stats': stats})
 
-    # Chọn Vụ
     opt_vu = [f"Vụ {i+1}: {v['start']} -> {v['end']}" for i, v in enumerate(danh_sach_vu)]
     chon_vu_label = st.selectbox("📅 Chọn mùa vụ:", opt_vu)
     v_idx = opt_vu.index(chon_vu_label)
     vu_ht = danh_sach_vu[v_idx]
-
-    # Chia giai đoạn
     ds_gd = thuc_thi_chia_giai_doan(sorted(vu_ht['daily_stats'].keys()), vu_ht['daily_stats'])
 
-    # Radio chọn giai đoạn
     st.sidebar.markdown("---")
-    st.sidebar.subheader("🔍 Chế độ xem")
     chế_độ = ["Toàn mùa vụ"] + [f"Giai đoạn {i+1}" for i in range(len(ds_gd))]
-    lua_chon = st.sidebar.radio("Phạm vi dữ liệu:", chế_độ)
+    lua_chon = st.sidebar.radio("🔍 Chọn phạm vi xem:", chế_độ)
 
     if lua_chon == "Toàn mùa vụ":
         du_lieu = vu_ht['daily_stats']
-        tieu_de = f"VỤ {v_idx + 1}"
+        tieu_de = f"BÁO CÁO VỤ {v_idx + 1}"
     else:
         g_idx = int(lua_chon.split()[-1]) - 1
         du_lieu = {d: vu_ht['daily_stats'][d] for d in ds_gd[g_idx]}
-        tieu_de = f"GIAI ĐOẠN {g_idx + 1}"
+        tieu_de = f"BÁO CÁO GIAI ĐOẠN {g_idx + 1}"
 
-    # --- CHIA 2 CỘT GIAO DIỆN ---
+    # --- BỐ CỤC Dashboard ---
     col_trai, col_phai = st.columns([6, 4], gap="large")
 
     with col_trai:
-        st.subheader(f"📊 {tieu_de}")
-        # Chỉ số Metric tổng quan
+        st.subheader(tieu_de)
+        # SỬA LỖI TẠI ĐÂY: Hiển thị Metric đơn giản, tránh dùng box màu trắng
         m1, m2 = st.columns(2)
-        m1.metric("Tổng số ngày", len(du_lieu))
-        m2.metric("Tổng lần tưới", sum(i['count'] for i in du_lieu.values()))
+        m1.metric("Số ngày trong kỳ", f"{len(du_lieu)} ngày")
+        m2.metric("Tổng lần tưới", f"{sum(i['count'] for i in du_lieu.values())} lần")
         
-        ve_bieu_do_ngang(du_lieu, "Biểu đồ tần suất tưới")
+        ve_bieu_do_ngang(du_lieu, "Phân bố tần suất tưới")
 
     with col_phai:
-        # Hiển thị bảng chi tiết bên phải
-        with st.container():
-            hien_thi_bang_du_lieu(du_lieu)
+        hien_thi_bang_du_lieu(du_lieu)
 
-# --- PHẦN QUÉT KHU VỰC ---
+# --- XỬ LÝ FILE ---
 if FILES_UPLOAD:
     selected_files = [f for f in FILES_UPLOAD if st.sidebar.checkbox(f.name, value=True, key=f.name)]
     data_tong_hop = []
     for f in selected_files:
         content = json.load(f)
         if isinstance(content, list): data_tong_hop.extend(content)
-    
     if data_tong_hop:
         khu_tt = {}
         data_s = sorted(data_tong_hop, key=lambda x: x.get('Thời gian', ''))
@@ -199,10 +168,9 @@ if FILES_UPLOAD:
                     if MIN_DURATION_SECONDS <= dur <= THOI_GIAN_TOI_DA_GIAY:
                         khu_tt[h1.get('STT')] = khu_tt.get(h1.get('STT'), 0) + 1
                 except: continue
-        
         if khu_tt:
             ds_k = sorted(khu_tt.keys(), key=lambda x: int(x) if x.isdigit() else x)
             khu_c = st.sidebar.selectbox("🎯 Chọn Khu vực:", ds_k)
             thuc_thi_tong_hop(data_tong_hop, khu_c)
 else:
-    st.info("👋 Vui lòng tải file JSON để bắt đầu phân tích.")
+    st.info("👋 Vui lòng tải file JSON để bắt đầu.")
