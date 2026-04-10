@@ -1,6 +1,7 @@
 import streamlit as st
 import json
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 from datetime import datetime
 
 # --- 1. CẤU HÌNH HẰNG SỐ ---
@@ -20,13 +21,8 @@ st.set_page_config(page_title="Dashboard Phân Tích Tưới", layout="wide")
 # --- 2. CSS ĐẶC TRỊ LỖI HIỂN THỊ CHỈ SỐ ---
 st.markdown("""
     <style>
-    [data-testid="stMetricValue"] {
-        color: #FFFFFF !important;
-        font-weight: bold !important;
-    }
-    [data-testid="stMetricLabel"] {
-        color: #A0A0A0 !important;
-    }
+    [data-testid="stMetricValue"] { color: #FFFFFF !important; font-weight: bold !important; }
+    [data-testid="stMetricLabel"] { color: #A0A0A0 !important; }
     div[data-testid="stMetric"] {
         background-color: rgba(255, 255, 255, 0.1) !important;
         border: 1px solid rgba(255, 255, 255, 0.2) !important;
@@ -42,37 +38,52 @@ st.title("💧 Hệ Thống Phân Tích Mùa Vụ & Giai Đoạn")
 st.sidebar.header("📁 Quản lý dữ liệu")
 FILES_UPLOAD = st.sidebar.file_uploader("Tải lên các file JSON", type=['json'], accept_multiple_files=True)
 
-def ve_bieu_do_ngang(du_lieu_bieu_do, tieu_de):
-    """Vẽ biểu đồ với nền trắng và chữ đen"""
+# --- 3. HÀM VẼ BIỂU ĐỒ ĐA SẮC ---
+def ve_bieu_do_ngang_da_sac(du_lieu_bieu_do, danh_sach_gd, tieu_de, is_toan_vu=True):
     dates = sorted(du_lieu_bieu_do.keys(), reverse=True) 
     counts = [du_lieu_bieu_do[d]['count'] for d in dates]
-    chart_height = min(10, max(4, len(dates) * 0.35))
     
-    # Tạo figure
+    # Bảng màu hiện đại (15 màu cho 15 giai đoạn tối đa)
+    palette = [
+        '#2E7D32', '#1565C0', '#C62828', '#AD1457', '#6A1B9A', 
+        '#283593', '#0277BD', '#00695C', '#827717', '#EF6C00', 
+        '#D84315', '#4E342E', '#424242', '#37474F', '#000000'
+    ]
+
+    # Xác định màu cho từng cột
+    bar_colors = []
+    if is_toan_vu:
+        for d in dates:
+            color_found = palette[0] # Mặc định
+            for idx, gd in enumerate(danh_sach_gd):
+                if d in gd:
+                    color_found = palette[idx % len(palette)]
+                    break
+            bar_colors.append(color_found)
+    else:
+        bar_colors = [palette[0]] * len(dates)
+
+    chart_height = min(12, max(5, len(dates) * 0.35))
     fig, ax = plt.subplots(figsize=(8, chart_height))
     
-    # ÉP NỀN TRẮNG
     fig.patch.set_facecolor('white')
     ax.set_facecolor('white')
     
-    # Vẽ cột dữ liệu
-    ax.barh(dates, counts, color='#2E7D32', alpha=0.9) # Xanh lá đậm cho rõ trên nền trắng
-    ax.axvline(x=MIN_PUMP_PER_DAY, color='#D32F2F', linestyle='--', linewidth=1.5, label='Ngưỡng chuẩn')
+    # Vẽ biểu đồ với danh sách màu đã chọn
+    ax.barh(dates, counts, color=bar_colors, alpha=0.85)
+    ax.axvline(x=MIN_PUMP_PER_DAY, color='#FF0000', linestyle='--', linewidth=1.5)
     
-    # ÉP CHỮ MÀU ĐEN (Để đọc được trên nền trắng)
-    ax.set_title(tieu_de, fontsize=10, fontweight='bold', color='black')
-    ax.tick_params(axis='both', which='major', labelsize=9, colors='black')
+    ax.set_title(tieu_de, fontsize=11, fontweight='bold', color='black', pad=20)
+    ax.tick_params(axis='both', labelsize=9, colors='black')
     
-    # Viền biểu đồ màu xám đậm
     for spine in ax.spines.values():
         spine.set_edgecolor('#333333')
-        spine.set_visible(True)
-        
-    ax.grid(axis='x', linestyle=':', alpha=0.3, color='black') # Thêm lưới dọc cho dễ nhìn
     
+    ax.grid(axis='x', linestyle=':', alpha=0.3, color='black')
     plt.tight_layout()
     st.pyplot(fig)
 
+# --- 4. CÁC HÀM LOGIC ---
 def thuc_thi_chia_giai_doan(ngay_sap_xep, daily_stats):
     danh_sach_gd = []
     if not ngay_sap_xep: return danh_sach_gd
@@ -143,6 +154,7 @@ def thuc_thi_tong_hop(data_tong_hop, kv_input_id):
     chon_vu_label = st.selectbox("📅 Chọn mùa vụ:", opt_vu)
     v_idx = opt_vu.index(chon_vu_label)
     vu_ht = danh_sach_vu[v_idx]
+    
     ds_gd = thuc_thi_chia_giai_doan(sorted(vu_ht['daily_stats'].keys()), vu_ht['daily_stats'])
 
     st.sidebar.markdown("---")
@@ -151,28 +163,30 @@ def thuc_thi_tong_hop(data_tong_hop, kv_input_id):
 
     if lua_chon == "Toàn mùa vụ":
         du_lieu = vu_ht['daily_stats']
-        tieu_de = f"BÁO CÁO VỤ {v_idx + 1}"
+        tieu_de = f"PHÂN TÍCH TOÀN VỤ {v_idx + 1}"
+        is_toan_vu = True
     else:
         g_idx = int(lua_chon.split()[-1]) - 1
         du_lieu = {d: vu_ht['daily_stats'][d] for d in ds_gd[g_idx]}
-        tieu_de = f"BÁO CÁO GIAI ĐOẠN {g_idx + 1}"
+        tieu_de = f"PHÂN TÍCH GIAI ĐOẠN {g_idx + 1}"
+        is_toan_vu = False
 
-    # --- BỐ CỤC DASHBOARD ---
+    # --- HIỂN THỊ DASHBOARD ---
     col_trai, col_phai = st.columns([6, 4], gap="large")
 
     with col_trai:
         st.subheader(tieu_de)
         m1, m2 = st.columns(2)
-        m1.metric("Số ngày trong kỳ", f"{len(du_lieu)} ngày")
+        m1.metric("Số ngày", f"{len(du_lieu)} ngày")
         m2.metric("Tổng lần tưới", f"{sum(i['count'] for i in du_lieu.values())} lần")
         
-        # Gọi hàm vẽ biểu đồ nền trắng
-        ve_bieu_do_ngang(du_lieu, "Phân bố tần suất tưới")
+        # Gọi hàm vẽ đa sắc
+        ve_bieu_do_ngang_da_sac(du_lieu, ds_gd, "Sự biến động tần suất tưới theo giai đoạn", is_toan_vu)
 
     with col_phai:
         hien_thi_bang_du_lieu(du_lieu)
 
-# --- XỬ LÝ FILE ---
+# --- KHỞI CHẠY ---
 if FILES_UPLOAD:
     selected_files = [f for f in FILES_UPLOAD if st.sidebar.checkbox(f.name, value=True, key=f.name)]
     data_tong_hop = []
@@ -196,4 +210,4 @@ if FILES_UPLOAD:
             khu_c = st.sidebar.selectbox("🎯 Chọn Khu vực:", ds_k)
             thuc_thi_tong_hop(data_tong_hop, khu_c)
 else:
-    st.info("👋 Vui lòng tải file JSON để bắt đầu.")
+    st.info("👋 Tải file JSON để xem Dashboard đa sắc.")
