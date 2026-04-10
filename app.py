@@ -3,7 +3,7 @@ import json
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-# --- 1. CẤU HÌNH HẰNG SỐ ---
+# --- 1. CẤU HÌNH HẰNG SỐ --- 
 MIN_DURATION_SECONDS = 20
 THOI_GIAN_TOI_DA_GIAY = 3600
 MIN_PUMP_PER_DAY = 5       
