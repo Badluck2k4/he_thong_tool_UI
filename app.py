@@ -16,7 +16,7 @@ GIATRI_GOC = {
     "MIN_VU": 7
 }
 
-st.set_page_config(page_title="Phân tích Mùa vụ Đa biến v5.8", layout="wide")
+st.set_page_config(page_title="Phân tích Mùa vụ Đa biến v5.9", layout="wide")
 
 # --- KHỞI TẠO TRẠNG THÁI (SESSION STATE) CHO TÍNH NĂNG RESET ---
 if 'ss_lan_key' not in st.session_state:
@@ -57,10 +57,10 @@ def chia_giai_doan_bien_thien_dong_thoi(danh_sach_ngay, du_lieu_tong_hop, cau_hi
             v_now = du_lieu_tong_hop[ngay_dang_xet].get(khoa_chi_so)
             v_prev = du_lieu_tong_hop[ngay_truoc_do].get(khoa_chi_so)
             if v_now is not None and v_prev is not None:
-                if abs(v_now - v_prev) > nguong_sai_so:
+                # ĐÃ SỬA Ở ĐÂY: Thay đổi từ > thành >=
+                if abs(v_now - v_prev) >= nguong_sai_so:
                     ket_qua_kiem_tra.append(True)
         
-        # Chỉ ngắt giai đoạn nếu TẤT CẢ các chỉ số được chọn đều vượt ngưỡng
         if len(ket_qua_kiem_tra) == len(cau_hinh_nguong) and all(ket_qua_kiem_tra):
             danh_sach_cac_gd.append(nhom_hien_tai)
             nhom_hien_tai = [ngay_dang_xet]
@@ -216,7 +216,6 @@ if tep_nho_giot:
         if not chi_so_chon:
             st.warning("⚠️ Hãy chọn ít nhất một chỉ số để hiển thị biểu đồ.")
         else:
-            # SỬA LỖI Ở ĐÂY: Xây dựng dictionary cấu hình ngưỡng linh hoạt dựa trên chỉ số đang tick
             nguong_ngat_thuc_te = {}
             if "Lần tưới" in chi_so_chon:
                 nguong_ngat_thuc_te['so_lan_tuoi'] = ss_lan
@@ -225,27 +224,4 @@ if tep_nho_giot:
             if "EC Yêu cầu" in chi_so_chon:
                 nguong_ngat_thuc_te['ecreq'] = ss_req
 
-            ds_giai_doan = chia_giai_doan_bien_thien_dong_thoi(ngay_vu, du_lieu_tong_hop, nguong_ngat_thuc_te)
-
-            st.write(f"### Phân tích: {len(ds_giai_doan)} giai đoạn")
-            ve_bieu_do_dong_thoi(du_lieu_tong_hop, ds_giai_doan, chi_so_chon)
-
-            st.divider()
-            st.write("### Bảng chi tiết")
-            bang_hien_thi = []
-            dem = 1
-            for i, gd in enumerate(ds_giai_doan):
-                for n in gd:
-                    bang_hien_thi.append({
-                        "STT Ngày": dem, 
-                        "Giai đoạn": i + 1, 
-                        "Ngày": n,
-                        "Lần tưới": int(du_lieu_tong_hop[n]['so_lan_tuoi']),
-                        "Thời gian tưới (Phút)": du_lieu_tong_hop[n]['thoi_gian_tuoi_phut'],
-                        "TBEC": f"{du_lieu_tong_hop[n]['tbec']:.2f}",
-                        "EC Yêu cầu": f"{du_lieu_tong_hop[n]['ecreq']:.2f}"
-                    })
-                    dem += 1
-            st.table(bang_hien_thi)
-else:
-    st.info("👋 Vui lòng tải dữ liệu.")
+            ds_giai_doan = chia_giai_doan_bien_thien_dong_th
