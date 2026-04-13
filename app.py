@@ -224,4 +224,27 @@ if tep_nho_giot:
             if "EC Yêu cầu" in chi_so_chon:
                 nguong_ngat_thuc_te['ecreq'] = ss_req
 
-            ds_giai_doan = chia_giai_doan_bien_thien_dong_th
+            ds_giai_doan = chia_giai_doan_bien_thien_dong_thoi(ngay_vu, du_lieu_tong_hop, nguong_ngat_thuc_te)
+
+            st.write(f"### Phân tích: {len(ds_giai_doan)} giai đoạn")
+            ve_bieu_do_dong_thoi(du_lieu_tong_hop, ds_giai_doan, chi_so_chon)
+
+            st.divider()
+            st.write("### Bảng chi tiết")
+            bang_hien_thi = []
+            dem = 1
+            for i, gd in enumerate(ds_giai_doan):
+                for n in gd:
+                    bang_hien_thi.append({
+                        "STT Ngày": dem, 
+                        "Giai đoạn": i + 1, 
+                        "Ngày": n,
+                        "Lần tưới": int(du_lieu_tong_hop[n]['so_lan_tuoi']),
+                        "Thời gian tưới (Phút)": du_lieu_tong_hop[n]['thoi_gian_tuoi_phut'],
+                        "TBEC": f"{du_lieu_tong_hop[n]['tbec']:.2f}",
+                        "EC Yêu cầu": f"{du_lieu_tong_hop[n]['ecreq']:.2f}"
+                    })
+                    dem += 1
+            st.table(bang_hien_thi)
+else:
+    st.info("👋 Vui lòng tải dữ liệu.")
