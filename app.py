@@ -16,7 +16,7 @@ GIATRI_GOC = {
     "MIN_VU": 7
 }
 
-st.set_page_config(page_title="Phân tích Mùa vụ Đa biến v5.6", layout="wide")
+st.set_page_config(page_title="Phân tích Mùa vụ Đa biến v5.8", layout="wide")
 
 # --- KHỞI TẠO TRẠNG THÁI (SESSION STATE) CHO TÍNH NĂNG RESET ---
 if 'ss_lan_key' not in st.session_state:
@@ -60,6 +60,7 @@ def chia_giai_doan_bien_thien_dong_thoi(danh_sach_ngay, du_lieu_tong_hop, cau_hi
                 if abs(v_now - v_prev) > nguong_sai_so:
                     ket_qua_kiem_tra.append(True)
         
+        # Chỉ ngắt giai đoạn nếu TẤT CẢ các chỉ số được chọn đều vượt ngưỡng
         if len(ket_qua_kiem_tra) == len(cau_hinh_nguong) and all(ket_qua_kiem_tra):
             danh_sach_cac_gd.append(nhom_hien_tai)
             nhom_hien_tai = [ngay_dang_xet]
@@ -128,7 +129,7 @@ with st.sidebar:
     tep_cham_phan = st.file_uploader("Tải file Châm phân", type=['json'], accept_multiple_files=True)
     
     st.divider()
-    st.subheader("📊 Chọn chỉ số hiển thị")
+    st.subheader("📊 Chọn chỉ số hiển thị & phân tích")
     tick_lan = st.checkbox("Lần tưới", value=True)
     tick_tbec = st.checkbox("TBEC", value=True)
     tick_req = st.checkbox("EC Yêu cầu", value=True)
@@ -141,10 +142,8 @@ with st.sidebar:
     st.divider()
     st.subheader("⚙️ Ngưỡng ngắt giai đoạn")
     
-    # THÊM MỚI: Nút Reset gọi hàm phuc_hoi_sai_so_mac_dinh
     st.button("🔄 Đặt lại mặc định", on_click=phuc_hoi_sai_so_mac_dinh, use_container_width=True)
     
-    # Gắn các input vào session_state thông qua tham số key
     ss_lan = st.number_input("Sai số Lần tưới", key="ss_lan_key", step=0.1)
     ss_tbec = st.number_input("Sai số TBEC", key="ss_tbec_key", step=0.1)
     ss_req = st.number_input("Sai số EC Req", key="ss_req_key", step=0.1)
@@ -205,7 +204,7 @@ if tep_nho_giot:
             raw_tbec = np.mean(data_cp_ngay[n]['tbec']) if n in data_cp_ngay and data_cp_ngay[n]['tbec'] else 0
             raw_req = np.mean(data_cp_ngay[n]['req']) if n in data_cp_ngay and data_cp_ngay[n]['req'] else 0
             
-            phut_tuoi = round(thoi_gian_ngay.get(n, 0) / 60, 1)
+            phut_tuoi = int(round(thoi_gian_ngay.get(n, 0) / 60))
             
             du_lieu_tong_hop[n] = {
                 'so_lan_tuoi': thong_ke_ngay[n],
@@ -217,8 +216,16 @@ if tep_nho_giot:
         if not chi_so_chon:
             st.warning("⚠️ Hãy chọn ít nhất một chỉ số để hiển thị biểu đồ.")
         else:
-            nguong_ngat_full = {'so_lan_tuoi': ss_lan, 'tbec': ss_tbec, 'ecreq': ss_req}
-            ds_giai_doan = chia_giai_doan_bien_thien_dong_thoi(ngay_vu, du_lieu_tong_hop, nguong_ngat_full)
+            # SỬA LỖI Ở ĐÂY: Xây dựng dictionary cấu hình ngưỡng linh hoạt dựa trên chỉ số đang tick
+            nguong_ngat_thuc_te = {}
+            if "Lần tưới" in chi_so_chon:
+                nguong_ngat_thuc_te['so_lan_tuoi'] = ss_lan
+            if "TBEC" in chi_so_chon:
+                nguong_ngat_thuc_te['tbec'] = ss_tbec
+            if "EC Yêu cầu" in chi_so_chon:
+                nguong_ngat_thuc_te['ecreq'] = ss_req
+
+            ds_giai_doan = chia_giai_doan_bien_thien_dong_thoi(ngay_vu, du_lieu_tong_hop, nguong_ngat_thuc_te)
 
             st.write(f"### Phân tích: {len(ds_giai_doan)} giai đoạn")
             ve_bieu_do_dong_thoi(du_lieu_tong_hop, ds_giai_doan, chi_so_chon)
