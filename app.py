@@ -4,82 +4,91 @@ import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-# --- 1. CẤU HÌNH HẰNG SỐ (GIỮ NGUYÊN VÀ BỔ SUNG) ---
+# --- 1. CẤU HÌNH HẰNG SỐ (TỪ CODE GỐC CỦA BẠN) ---
 MIN_DURATION_SECONDS = 20
 THOI_GIAN_TOI_DA_GIAY = 3600
 MIN_PUMP_PER_DAY = 5
 MAX_GAP_DAYS = 2
 MIN_SEASON_DURATION = 7
+NGUONG_BIEN_DONG_TINH = 2.5 # Cho Cách 1
+NGAY_TOI_THIEU_GD = 3
 
-# Thông số chia giai đoạn theo yêu cầu mới
+# Ngưỡng cho Châm phân (Đã chốt)
 NGUONG_TBEC = 8.0
 NGUONG_EC_REQ = 5.0
-SO_NGAY_MIN_GD = 3
 
-st.set_page_config(page_title="Hệ thống Phân tích Dinh dưỡng & Tưới", layout="wide")
+st.set_page_config(page_title="Hệ thống Phân tích Tưới & Dinh dưỡng", layout="wide")
 
-# --- 2. HÀM TIỆN ÍCH PHÁT SINH (VIỆT HÓA) ---
-def lam_sach_du_lieu(gia_tri):
-    try:
-        return float(str(gia_tri).replace(',', '.'))
-    except:
-        return 0.0
+# --- 2. HÀM VẼ BIỂU ĐỒ (GIỮ NGUYÊN LOGIC ĐA SẮC CỦA BẠN) ---
+def ve_bieu_do_ngang_da_sac(du_lieu_bieu_do, danh_sach_gd, tieu_de):
+    dates = sorted(du_lieu_bieu_do.keys(), reverse=True)
+    counts_visual = [du_lieu_bieu_do[d].get('count_visual', du_lieu_bieu_do[d].get('count', 0)) for d in dates]
+    counts_real = [du_lieu_bieu_do[d].get('count', 0) for d in dates]
+    
+    palette = ['#2E7D32', '#1565C0', '#C62828', '#AD1457', '#6A1B9A', '#0277BD', '#00695C', '#EF6C00', '#D84315', '#4E342E']
+    bar_colors = []
+    for d in dates:
+        color = palette[0]
+        for idx, gd in enumerate(danh_sach_gd):
+            if d in gd:
+                color = palette[idx % len(palette)]
+                break
+        bar_colors.append(color)
 
-# --- 3. LOGIC CHIA GIAI ĐOẠN (ƯU TIÊN GOM NHÓM SAI SỐ THẤP) ---
-def chia_giai_doan_thong_minh(danh_sach_ngay, du_lieu_ngay, kieu_chia):
-    nguong = NGUONG_TBEC if kieu_chia == 'tbec' else NGUONG_EC_REQ
+    chart_height = min(15, max(5, len(dates) * 0.4))
+    fig, ax = plt.subplots(figsize=(10, chart_height))
+    ax.barh(dates, counts_visual, color=bar_colors, alpha=0.8)
+    ax.axvline(x=MIN_PUMP_PER_DAY, color='red', linestyle='--', alpha=0.5)
+    ax.set_title(tieu_de, fontsize=12, fontweight='bold')
+    
+    for i, (v_vis, v_real) in enumerate(zip(counts_visual, counts_real)):
+        ax.text(v_vis + 0.2, i, f"{v_real}", va='center', fontsize=9, fontweight='bold')
+    
+    plt.tight_layout()
+    st.pyplot(fig)
+
+# --- 3. LOGIC CHIA GIAI ĐOẠN (DÙNG CHUNG CHO CÁC CÁCH) ---
+def chia_giai_doan_tong_quat(ngay_list, data, key, nguong):
     danh_sach_gd = []
-    if not danh_sach_ngay: return danh_sach_gd
-
-    nhom_ht = [danh_sach_ngay[0]]
-    for i in range(1, len(danh_sach_ngay)):
-        ngay_ht = danh_sach_ngay[i]
-        val_ht = du_lieu_ngay[ngay_ht][kieu_chia]
-        avg_nhom = np.mean([du_lieu_ngay[d][kieu_chia] for d in nhom_ht])
+    if not ngay_list: return danh_sach_gd
+    
+    nhom_ht = [ngay_list[0]]
+    for i in range(1, len(ngay_list)):
+        val_ht = data[ngay_list[i]][key]
+        avg_nhom = np.mean([data[d][key] for d in nhom_ht])
         
         sai_so = abs(val_ht - avg_nhom)
-        # Ngắt nếu sai số vượt ngưỡng và đủ ngày, hoặc đột biến gấp 3 lần ngưỡng
-        if (sai_so > nguong and len(nhom_ht) >= SO_NGAY_MIN_GD) or (sai_so > nguong * 3):
+        # Ngắt nếu vượt ngưỡng (hoặc vượt gấp 3 lần ngưỡng thì ngắt luôn)
+        if (sai_so > nguong and len(nhom_ht) >= NGAY_TOI_THIEU_GD) or (sai_so > nguong * 3):
             danh_sach_gd.append(nhom_ht)
-            nhom_ht = [ngay_ht]
+            nhom_ht = [ngay_list[i]]
         else:
-            nhom_ht.append(ngay_ht)
-            
+            nhom_ht.append(ngay_list[i])
     danh_sach_gd.append(nhom_ht)
     return danh_sach_gd
 
 # --- 4. GIAO DIỆN CHÍNH ---
-st.title("🌱 Hệ thống Quản lý Mùa vụ & Dinh dưỡng")
-
 with st.sidebar:
-    st.header("📂 Nhập dữ liệu")
-    file_nho_giot = st.file_uploader("Tải file Nhỏ giọt (Gốc)", type=['json'], accept_multiple_files=True)
-    file_cham_phan = st.file_uploader("Tải file Châm phân", type=['json'], accept_multiple_files=True)
-    
-    st.divider()
-    st.header("⚙️ Cấu hình phân tích")
-    cach_chia_chon = st.multiselect(
-        "Chọn cách chia giai đoạn:",
-        ["Cách 1: Lần tưới (Nhỏ giọt)", "Cách 2: TBEC (Châm phân)", "Cách 3: EC Yêu cầu (Châm phân)"],
-        default=["Cách 2: TBEC (Châm phân)"]
-    )
+    st.header("📂 Tải tệp dữ liệu")
+    files_nho_giot = st.file_uploader("1. File Nhỏ giọt (Lấy mùa vụ làm gốc)", type=['json'], accept_multiple_files=True)
+    files_cham_phan = st.file_uploader("2. File Châm phân", type=['json'], accept_multiple_files=True)
 
-# --- 5. XỬ LÝ LOGIC TỔNG HỢP ---
-if file_nho_giot:
-    # Gom dữ liệu nhỏ giọt
+st.title("📊 Phân tích Giai đoạn Mùa vụ")
+
+# Kiểm tra file nhỏ giọt
+if files_nho_giot:
     data_ng = []
-    for f in file_nho_giot:
+    for f in files_nho_giot:
         content = json.load(f)
         if isinstance(content, list): data_ng.extend(content)
     
-    # Lấy danh sách STT
     stt_list = sorted(list(set(str(d.get('STT')) for d in data_ng if d.get('STT'))))
-    khu_vuc_chon = st.sidebar.selectbox("🎯 Chọn khu vực:", stt_list)
+    khu_vuc = st.sidebar.selectbox("🎯 Chọn khu vực (STT):", stt_list)
 
-    # A. XÁC ĐỊNH MÙA VỤ TỪ FILE NHỎ GIỌT (LÀM GỐC)
+    # --- BƯỚC 1: XÁC ĐỊNH MÙA VỤ ---
     fmt = "%Y-%m-%d %H-%M-%S"
-    lich_tuoi_ngay = {}
-    du_lieu_khu = sorted([d for d in data_ng if str(d.get('STT')) == khu_vuc_chon],
+    daily_raw_ng = {}
+    du_lieu_khu = sorted([d for d in data_ng if str(d.get('STT')) == khu_vuc],
                         key=lambda x: datetime.strptime(x['Thời gian'], fmt))
 
     for i in range(len(du_lieu_khu) - 1):
@@ -89,13 +98,15 @@ if file_nho_giot:
             dur = (t2 - t1).total_seconds()
             if MIN_DURATION_SECONDS <= dur <= THOI_GIAN_TOI_DA_GIAY:
                 d_str = t1.strftime("%Y-%m-%d")
-                lich_tuoi_ngay[d_str] = lich_tuoi_ngay.get(d_str, 0) + 1
+                if d_str not in daily_raw_ng: daily_raw_ng[d_str] = {'count': 0, 'total_time': 0}
+                daily_raw_ng[d_str]['count'] += 1
+                daily_raw_ng[d_str]['total_time'] += dur
 
     ngay_hop_le = sorted([datetime.strptime(n, "%Y-%m-%d").date() 
-                         for n, c in lich_tuoi_ngay.items() if c >= MIN_PUMP_PER_DAY])
+                         for n, c in daily_raw_ng.items() if c['count'] >= MIN_PUMP_PER_DAY])
     
-    danh_sach_vu = []
     if ngay_hop_le:
+        danh_sach_vu = []
         bat_dau = ngay_hop_le[0]
         for i in range(1, len(ngay_hop_le)):
             if (ngay_hop_le[i] - ngay_hop_le[i-1]).days > MAX_GAP_DAYS:
@@ -104,61 +115,37 @@ if file_nho_giot:
                 bat_dau = ngay_hop_le[i]
         danh_sach_vu.append({'start': bat_dau, 'end': ngay_hop_le[-1]})
 
-        # Chọn mùa vụ
         options_vu = [f"Vụ {i+1}: {v['start']} -> {v['end']}" for i, v in enumerate(danh_sach_vu)]
-        vu_chon_label = st.selectbox("📅 Chọn mùa vụ phân tích:", options_vu)
-        vu_hien_tai = danh_sach_vu[options_vu.index(vu_chon_label)]
+        vu_chon_label = st.selectbox("📅 Chọn mùa vụ:", options_vu)
+        vu_ht = danh_sach_vu[options_vu.index(vu_chon_label)]
 
-        # B. HIỂN THỊ CÁC CÁCH CHIA
-        tab_list = st.tabs(cach_chia_chon) if cach_chia_chon else []
+        # --- BƯỚC 2: CHỌN CÁCH CHIA (DẠNG CHECKBOX) ---
+        st.markdown("### 🛠 Chọn phương thức phân chia giai đoạn")
+        c1, c2, c3 = st.columns(3)
+        with c1: check_c1 = st.checkbox("Cách 1: Theo Lần tưới", value=True)
+        with c2: check_c2 = st.checkbox("Cách 2: Theo TBEC")
+        with c3: check_c3 = st.checkbox("Cách 3: Theo EC Yêu cầu")
 
-        for i, tab in enumerate(tab_list):
-            ten_cach = cach_chia_chon[i]
+        # --- BƯỚC 3: HIỂN THỊ DỮ LIỆU ---
+        
+        # CÁCH 1: LỊCH TƯỚI
+        if check_c1:
+            st.divider()
+            st.subheader("💧 Cách 1: Phân chia theo Tần suất tưới (Nhỏ giọt)")
+            ngay_trong_vu = sorted([d for d in daily_raw_ng 
+                                   if vu_ht['start'] <= datetime.strptime(d, "%Y-%m-%d").date() <= vu_ht['end']])
+            ds_gd_c1 = chia_giai_doan_tong_quat(ngay_trong_vu, daily_raw_ng, 'count', NGUONG_BIEN_DONG_TINH)
             
-            with tab:
-                if "Cách 1" in ten_cach:
-                    st.info("Logic hiển thị biểu đồ lần tưới (Sử dụng code gốc của bạn)")
-                    # Tích hợp hàm vẽ biểu đồ của bạn vào đây...
+            # Tạo dữ liệu visual để biểu đồ đẹp (giống code cũ của bạn)
+            stats_visual = {}
+            for gd in ds_gd_c1:
+                avg_val = round(sum(daily_raw_ng[d]['count'] for d in gd) / len(gd))
+                for d in gd:
+                    stats_visual[d] = {'count': daily_raw_ng[d]['count'], 'count_visual': avg_val}
+            
+            ve_bieu_do_ngang_da_sac(stats_visual, ds_gd_c1, "Biểu đồ giai đoạn dựa trên lần tưới")
 
-                elif ("Cách 2" in ten_cach or "Cách 3" in ten_cach) and file_cham_phan:
-                    # Xử lý dữ liệu châm phân
-                    data_cp = []
-                    for f in file_cham_phan:
-                        content = json.load(f)
-                        if isinstance(content, list): data_cp.extend(content)
-                    
-                    # Tính trung bình ngày trong khung mùa vụ
-                    stats_phan = {}
-                    for item in data_cp:
-                        if str(item.get('STT')) != khu_vuc_chon: continue
-                        ngay_dt = datetime.strptime(item['Thời gian'], fmt).date()
-                        if vu_hien_tai['start'] <= ngay_dt <= vu_hien_tai['end']:
-                            n_str = ngay_dt.strftime("%Y-%m-%d")
-                            if n_str not in stats_phan: stats_phan[n_str] = {'tbec': [], 'ecreq': []}
-                            stats_phan[n_str]['tbec'].append(lam_sach_du_lieu(item.get('TBEC', 0)))
-                            stats_phan[n_str]['ecreq'].append(lam_sach_du_lieu(item.get('EC yêu cầu', 0)))
-                    
-                    du_lieu_ngay_cp = {d: {'tbec': np.mean(v['tbec']), 'ecreq': np.mean(v['ecreq'])} 
-                                      for d, v in stats_phan.items()}
-                    ngay_sap_xep = sorted(du_lieu_ngay_cp.keys())
-                    
-                    kieu_key = 'tbec' if "Cách 2" in ten_cach else 'ecreq'
-                    ds_giai_doan = chia_giai_doan_thong_minh(ngay_sap_xep, du_lieu_ngay_cp, kieu_key)
-
-                    # Hiển thị bảng kết quả
-                    st.subheader(f"Phân tích theo {kieu_key.upper()}")
-                    col_m1, col_m2 = st.columns(2)
-                    col_m1.metric("Tổng giai đoạn", len(ds_giai_doan))
-                    col_m2.metric("Số ngày trong vụ", len(ngay_sap_xep))
-
-                    for idx, gd in enumerate(ds_giai_doan):
-                        with st.expander(f"Giai đoạn {idx+1}: {gd[0]} đến {gd[-1]} ({len(gd)} ngày)"):
-                            val_avg = np.mean([du_lieu_ngay_cp[d][kieu_key] for d in gd])
-                            st.write(f"**Giá trị trung bình giai đoạn:** {val_avg:.2f}")
-                            st.table([{"Ngày": d, "Giá trị": f"{du_lieu_ngay_cp[d][kieu_key]:.2f}"} for d in gd])
-                
-                elif ("Cách 2" in ten_cach or "Cách 3" in ten_cach) and not file_cham_phan:
-                    st.warning("Vui lòng tải file Châm phân để xem dữ liệu này.")
-
-else:
-    st.info("Vui lòng tải ít nhất file Nhỏ giọt để xác định khung mùa vụ.")
+        # CÁCH 2 & 3: CHÂM PHÂN
+        if (check_c2 or check_c3):
+            if not files_cham_phan:
+                st.warning("⚠️ Bạn
