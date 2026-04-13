@@ -6,9 +6,9 @@ from datetime import datetime
 
 # --- 1. CẤU HÌNH HẰNG SỐ GỐC ---
 GIATRI_GOC = {
-    "LAN_TUOI": 1.0,  # Sai số 1 lần tưới
-    "TBEC": 4.0,      # Sai số 4.0 đơn vị
-    "EC_REQ": 2.0,    # Sai số 2.0 đơn vị
+    "LAN_TUOI": 1.0, 
+    "TBEC": 4.0,      
+    "EC_REQ": 2.0,    
     "GIAY_MIN": 20,
     "GIAY_MAX": 3600,
     "LAN_MIN_NGAY": 5,
@@ -16,7 +16,7 @@ GIATRI_GOC = {
     "MIN_VU": 7
 }
 
-st.set_page_config(page_title="Phân tích Mùa vụ Đa biến v5.2", layout="wide")
+st.set_page_config(page_title="Phân tích Mùa vụ Đa biến v5.3", layout="wide")
 
 # --- 2. CÁC HÀM LOGIC ---
 
@@ -32,44 +32,34 @@ def chuyen_doi_so_thuc(du_lieu, danh_sach_khoa):
 
 def chia_giai_doan_bien_thien_dong_thoi(danh_sach_ngay, du_lieu_tong_hop, cau_hinh_nguong):
     danh_sach_cac_gd = []
-    if not danh_sach_ngay:
-        return danh_sach_cac_gd
-
-    if not cau_hinh_nguong:
-        return [danh_sach_ngay]
+    if not danh_sach_ngay: return danh_sach_cac_gd
+    if not cau_hinh_nguong: return [danh_sach_ngay]
 
     nhom_hien_tai = [danh_sach_ngay[0]]
-
     for i in range(1, len(danh_sach_ngay)):
         ngay_dang_xet = danh_sach_ngay[i]
         ngay_truoc_do = nhom_hien_tai[-1]  
         ket_qua_kiem_tra = []
-        
         for khoa_chi_so, nguong_sai_so in cau_hinh_nguong.items():
-            gia_tri_hien_tai = du_lieu_tong_hop[ngay_dang_xet].get(khoa_chi_so)
-            gia_tri_truoc_do = du_lieu_tong_hop[ngay_truoc_do].get(khoa_chi_so)
-            
-            if gia_tri_hien_tai is not None and gia_tri_truoc_do is not None:
-                sai_so = abs(gia_tri_hien_tai - gia_tri_truoc_do)
-                vuot = sai_so > nguong_sai_so
-                ket_qua_kiem_tra.append(vuot)
-
+            v_now = du_lieu_tong_hop[ngay_dang_xet].get(khoa_chi_so)
+            v_prev = du_lieu_tong_hop[ngay_truoc_do].get(khoa_chi_so)
+            if v_now is not None and v_prev is not None:
+                if abs(v_now - v_prev) > nguong_sai_so:
+                    ket_qua_kiem_tra.append(True)
+        
         if len(ket_qua_kiem_tra) == len(cau_hinh_nguong) and all(ket_qua_kiem_tra):
             danh_sach_cac_gd.append(nhom_hien_tai)
             nhom_hien_tai = [ngay_dang_xet]
         else:
             nhom_hien_tai.append(ngay_dang_xet)
-
     danh_sach_cac_gd.append(nhom_hien_tai)
     return danh_sach_cac_gd
 
 def ve_bieu_do_dong_thoi(du_lieu_tong_hop, danh_sach_gd, chi_so_chon):
     ngay_co_so = sorted(du_lieu_tong_hop.keys())
-    if not ngay_co_so or not chi_so_chon: 
-        return
+    if not ngay_co_so or not chi_so_chon: return
 
     x_labels = list(range(1, len(ngay_co_so) + 1))
-    
     map_data = {
         "Lần tưới": ([du_lieu_tong_hop[n]['so_lan_tuoi'] for n in ngay_co_so], "Lần tưới (Lần)"),
         "TBEC": ([du_lieu_tong_hop[n]['tbec'] for n in ngay_co_so], "TBEC"),
@@ -79,48 +69,53 @@ def ve_bieu_do_dong_thoi(du_lieu_tong_hop, danh_sach_gd, chi_so_chon):
     bang_mau = ['#2E7D32', '#1565C0', '#C62828', '#AD1457', '#6A1B9A', '#00838F', '#283593']
     mau_cot = []
     ranh_gioi_gd = [] 
-    
     for i, ngay in enumerate(ngay_co_so):
         for idx, gd in enumerate(danh_sach_gd):
             if ngay in gd:
                 mau_cot.append(bang_mau[idx % len(bang_mau)])
-                if ngay == gd[0] and idx > 0:
-                    ranh_gioi_gd.append(i + 1)
+                if ngay == gd[0] and idx > 0: ranh_gioi_gd.append(i + 1)
                 break
 
     so_luong_tang = len(chi_so_chon)
     
-    # ĐIỀU CHỈNH KÍCH THƯỚC Ở ĐÂY: Tăng chiều rộng cơ sở và hệ số chiều rộng, tăng chiều cao mỗi tầng lên 5
-    chieu_rong = max(16, len(ngay_co_so) * 0.8)
-    fig, axes = plt.subplots(so_luong_tang, 1, figsize=(chieu_rong, 5 * so_luong_tang), sharex=True)
+    # ĐIỀU CHỈNH KÍCH THƯỚC MỚI: 
+    # Chiều rộng 20 (to hơn chuẩn), Chiều cao 7 inch mỗi tầng (rất cao để nhìn rõ cột)
+    fig, axes = plt.subplots(so_luong_tang, 1, figsize=(20, 7 * so_luong_tang), sharex=True)
     
-    if so_luong_tang == 1:
-        axes = [axes]
+    if so_luong_tang == 1: axes = [axes]
         
-    tieu_de_chinh = f"Biến thiên Đồng thời: {' - '.join(chi_so_chon)}"
-    fig.suptitle(tieu_de_chinh, fontsize=18, fontweight='bold', y=0.98) # Tăng font title lên một chút cho cân đối
+    fig.suptitle(f"PHÂN TÍCH BIẾN THIÊN: {' - '.join(chi_so_chon).upper()}", 
+                 fontsize=24, fontweight='bold', y=0.96)
 
     def ve_tung_tang(ax, data, title, color_list):
-        ax.bar(x_labels, data, color=color_list, alpha=0.85)
-        ax.set_ylabel(title, fontweight='bold', fontsize=12) # Tăng font label trục Y
+        bars = ax.bar(x_labels, data, color=color_list, alpha=0.85, edgecolor='black', linewidth=0.5)
+        ax.set_ylabel(title, fontweight='bold', fontsize=16)
+        
+        # Tăng kích thước chữ số trên đầu cột
+        max_val = max(data) if data and max(data) > 0 else 1
         for i, v in enumerate(data):
-            ax.text(x_labels[i], v + (max(data)*0.02), f" {v:.2f}", ha='center', va='bottom', fontsize=10, rotation=45) # Tăng font số liệu
+            ax.text(x_labels[i], v + (max_val * 0.01), f"{v:g}", 
+                    ha='center', va='bottom', fontsize=13, fontweight='bold', rotation=0)
+        
+        # Kẻ ranh giới giai đoạn
         for rg in ranh_gioi_gd:
-            ax.axvline(x=rg - 0.5, color='gray', linestyle='--', alpha=0.7)
-        ax.grid(axis='y', linestyle=':', alpha=0.5)
-        ax.set_ylim(0, max(data) * 1.25 if max(data) > 0 else 1)
+            ax.axvline(x=rg - 0.5, color='red', linestyle='--', alpha=0.8, linewidth=2)
+        
+        ax.grid(axis='y', linestyle=':', alpha=0.6)
+        ax.tick_params(axis='y', labelsize=14)
+        ax.set_ylim(0, max_val * 1.15)
 
     for idx, ten_chi_so in enumerate(chi_so_chon):
         data, title = map_data[ten_chi_so]
         ve_tung_tang(axes[idx], data, title, mau_cot)
 
+    # Cấu hình trục X cuối cùng
     axes[-1].set_xticks(x_labels)
-    axes[-1].set_xticklabels(x_labels, fontsize=11)
-    axes[-1].set_xlabel("Số thứ tự Ngày", fontweight='bold', fontsize=12)
+    axes[-1].set_xticklabels(x_labels, fontsize=14, fontweight='bold')
+    axes[-1].set_xlabel("SỐ THỨ TỰ NGÀY", fontweight='bold', fontsize=16, labelpad=15)
 
-    plt.tight_layout()
-    plt.subplots_adjust(top=0.92 if so_luong_tang > 1 else 0.88)
-    st.pyplot(fig)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    st.pyplot(fig, use_container_width=True)
 
 # --- 3. GIAO DIỆN CHÍNH ---
 with st.sidebar:
@@ -131,10 +126,10 @@ with st.sidebar:
     st.divider()
     st.subheader("📊 Chọn chỉ số phân tích")
     danh_sach_chi_so = ["Lần tưới", "TBEC", "EC Yêu cầu"]
-    chi_so_chon = st.multiselect("Chỉ số cần xét", danh_sach_chi_so, default=danh_sach_chi_so)
+    chi_so_chon = st.multiselect("Chỉ số hiển thị trên biểu đồ", danh_sach_chi_so, default=danh_sach_chi_so)
 
     st.divider()
-    st.subheader("⚙️ Ngưỡng ngắt GD (Đồng thời)")
+    st.subheader("⚙️ Ngưỡng ngắt giai đoạn")
     ss_lan = st.number_input("Sai số Lần tưới", value=GIATRI_GOC["LAN_TUOI"], step=0.1)
     ss_tbec = st.number_input("Sai số TBEC", value=GIATRI_GOC["TBEC"], step=0.1)
     ss_req = st.number_input("Sai số EC Req", value=GIATRI_GOC["EC_REQ"], step=0.1)
@@ -189,7 +184,6 @@ if tep_nho_giot:
         for n in ngay_vu:
             raw_tbec = np.mean(data_cp_ngay[n]['tbec']) if n in data_cp_ngay and data_cp_ngay[n]['tbec'] else 0
             raw_req = np.mean(data_cp_ngay[n]['req']) if n in data_cp_ngay and data_cp_ngay[n]['req'] else 0
-            
             du_lieu_tong_hop[n] = {
                 'so_lan_tuoi': thong_ke_ngay[n],
                 'tbec': float(f"{raw_tbec:.2f}"),
@@ -197,34 +191,28 @@ if tep_nho_giot:
             }
 
         if len(chi_so_chon) == 0:
-            st.warning("⚠️ Vui lòng chọn ít nhất 1 chỉ số ở thanh bên trái để phân tích.")
+            st.warning("⚠️ Chọn ít nhất 1 chỉ số để xem biểu đồ.")
         else:
-            nguong_ngat = {}
-            if "Lần tưới" in chi_so_chon: nguong_ngat['so_lan_tuoi'] = ss_lan
-            if "TBEC" in chi_so_chon: nguong_ngat['tbec'] = ss_tbec
-            if "EC Yêu cầu" in chi_so_chon: nguong_ngat['ecreq'] = ss_req
+            # Ngưỡng ngắt tính dựa trên TOÀN BỘ 3 chỉ số để đảm bảo chia GD chuẩn
+            nguong_ngat_full = {'so_lan_tuoi': ss_lan, 'tbec': ss_tbec, 'ecreq': ss_req}
+            ds_giai_doan = chia_giai_doan_bien_thien_dong_thoi(ngay_vu, du_lieu_tong_hop, nguong_ngat_full)
 
-            ds_giai_doan = chia_giai_doan_bien_thien_dong_thoi(ngay_vu, du_lieu_tong_hop, nguong_ngat)
-
-            st.write(f"### Kết quả phân tích: {len(ds_giai_doan)} giai đoạn")
-            
+            st.write(f"### Phân tích: {len(ds_giai_doan)} giai đoạn")
             ve_bieu_do_dong_thoi(du_lieu_tong_hop, ds_giai_doan, chi_so_chon)
 
             st.divider()
-            st.write("### Chi tiết số liệu")
+            st.write("### Bảng chi tiết")
             bang_hien_thi = []
-            dem_ngay = 1
+            dem = 1
             for i, gd in enumerate(ds_giai_doan):
                 for n in gd:
                     bang_hien_thi.append({
-                        "STT Ngày": dem_ngay,
-                        "Giai đoạn": i + 1,
-                        "Ngày": n,
-                        "Số lần tưới": int(du_lieu_tong_hop[n]['so_lan_tuoi']),
+                        "STT Ngày": dem, "Giai đoạn": i + 1, "Ngày": n,
+                        "Lần tưới": int(du_lieu_tong_hop[n]['so_lan_tuoi']),
                         "TBEC": f"{du_lieu_tong_hop[n]['tbec']:.2f}",
                         "EC Yêu cầu": f"{du_lieu_tong_hop[n]['ecreq']:.2f}"
                     })
-                    dem_ngay += 1
+                    dem += 1
             st.table(bang_hien_thi)
 else:
     st.info("👋 Vui lòng tải dữ liệu.")
