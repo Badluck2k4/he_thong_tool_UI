@@ -13,7 +13,7 @@ GIATRI_GOC = {
     "GAP_NGAY": 2, "MIN_VU": 7
 }
 
-st.set_page_config(page_title="Phân tích Mùa vụ v3.7", layout="wide")
+st.set_page_config(page_title="Phân tích Mùa vụ v3.8", layout="wide")
 
 # =================================================================
 # KHUNG 2: CÁC THUẬT TOÁN LOGIC TÍNH TOÁN (BỘ NÃO)
@@ -37,7 +37,6 @@ def xac_dinh_vi_tri_vu(ngay_dang_xet_str, danh_sach_vu):
 
 def chia_giai_doan_tu_dong(danh_sach_ngay, du_lieu_ngay, khoa_chi_so, nguong_sai_so):
     danh_sach_cac_gd = []
-    # Loại bỏ các ngày 'None' (khoảng trống) trước khi tính toán giai đoạn
     ngay_thuc = [n for n in danh_sach_ngay if du_lieu_ngay[n] is not None]
     if not ngay_thuc: return []
     
@@ -54,25 +53,22 @@ def chia_giai_doan_tu_dong(danh_sach_ngay, du_lieu_ngay, khoa_chi_so, nguong_sai
     return danh_sach_cac_gd
 
 # =================================================================
-# KHUNG 3: LOGIC TRỰC QUAN HÓA (XỬ LÝ KHOẢNG TRỐNG VÀ KÍCH THƯỚC)
+# KHUNG 3: LOGIC TRỰC QUAN HÓA (XỬ LÝ THANH CUỘN & KÍCH THƯỚC THẬT)
 # =================================================================
 
 def ve_bieu_do_doc(du_lieu_bieu_do, danh_sach_gd, tieu_de, khoa_gia_tri):
-    # Lấy danh sách ngày bao gồm cả khoảng trống 'None'
     cac_ngay = list(du_lieu_bieu_do.keys())
     gia_tri_ve = []
     mau_ve = []
-    
     bang_mau = ['#2E7D32', '#1565C0', '#C62828', '#AD1457', '#6A1B9A', '#00838F', '#283593']
     
     for ngay in cac_ngay:
         if du_lieu_bieu_do[ngay] is None:
             gia_tri_ve.append(0)
-            mau_ve.append('white') # Cột trống
+            mau_ve.append('white')
         else:
             val = du_lieu_bieu_do[ngay].get('gia_tri_ao', du_lieu_bieu_do[ngay][khoa_gia_tri])
             gia_tri_ve.append(val)
-            # Tìm màu theo giai đoạn
             mau_chon = bang_mau[0]
             for idx, gd in enumerate(danh_sach_gd):
                 if ngay in gd:
@@ -80,26 +76,29 @@ def ve_bieu_do_doc(du_lieu_bieu_do, danh_sach_gd, tieu_de, khoa_gia_tri):
                     break
             mau_ve.append(mau_chon)
 
-    # ĐIỀU CHỈNH: Kích thước cực đại để không bị bóp
-    chieu_rong_moi_cot = 0.8 
+    # ĐIỀU CHỈNH KÍCH THƯỚC:
+    # 1.2 inch mỗi cột để đảm bảo cột to, rõ và giãn cách lớn
+    chieu_rong_moi_cot = 1.2 
     chieu_rong_tong = max(16, len(cac_ngay) * chieu_rong_moi_cot)
     
-    fig, ax = plt.subplots(figsize=(chieu_rong_tong, 6))
+    fig, ax = plt.subplots(figsize=(chieu_rong_tong, 6), dpi=100)
     x_truc = range(len(cac_ngay))
     
-    ax.bar(x_truc, gia_tri_ve, color=mau_ve, width=0.6, edgecolor='none')
+    # width=0.4: Cột chiếm 40% không gian, 60% còn lại là khoảng trắng giữa các cột
+    ax.bar(x_truc, gia_tri_ve, color=mau_ve, width=0.4, align='center')
     
-    ax.set_title(tieu_de, fontweight='bold', fontsize=18, pad=30)
+    ax.set_title(tieu_de, fontweight='bold', fontsize=22, pad=35)
     ax.set_xticks(x_truc)
-    # Chỉ hiển thị nhãn ngày cho những cột có dữ liệu, tránh rối mắt
     labels = [cac_ngay[i][-5:] if gia_tri_ve[i] > 0 else "" for i in range(len(cac_ngay))]
-    ax.set_xticklabels(labels, rotation=45, fontsize=9)
+    ax.set_xticklabels(labels, rotation=45, fontsize=10)
     
     plt.grid(axis='y', linestyle='--', alpha=0.3)
-    st.pyplot(fig)
+    
+    # QUAN TRỌNG: Tắt use_container_width để buộc Streamlit hiện thanh cuộn ngang
+    st.pyplot(fig, use_container_width=False)
 
 # =================================================================
-# KHUNG 4: LOGIC HIỆU CHỈNH GIAO DIỆN VÀ XỬ LÝ DỮ LIỆU
+# KHUNG 4: LOGIC GIAO DIỆN (UI)
 # =================================================================
 
 with st.sidebar:
@@ -108,7 +107,7 @@ with st.sidebar:
     tep_cham_phan = st.file_uploader("Tải file Châm phân", type=['json'], accept_multiple_files=True)
     
     st.divider()
-    st.subheader("🔍 Lọc thời gian tự do")
+    st.subheader("🔍 Lọc thời gian")
     ngay_bat_dau = st.date_input("Từ ngày", value=None)
     ngay_ket_thuc = st.date_input("Đến ngày", value=None)
     
@@ -130,7 +129,7 @@ if tep_nho_giot:
     stt_list = sorted(list(set(str(d.get('STT')) for d in du_lieu_tho_ng if d.get('STT'))))
     khu_vuc = st.sidebar.selectbox("🎯 Khu vực", stt_list)
 
-    # 1. Phân tích vụ gốc
+    # 1. Phân tích vụ gốc (Để xác định vị trí ngày)
     thong_ke_full = {}
     thoi_gian_full = {}
     data_kv = sorted([d for d in du_lieu_tho_ng if str(d.get('STT')) == khu_vuc], key=lambda x: x['Thời gian'])
@@ -157,48 +156,40 @@ if tep_nho_giot:
                 start = ngay_hl_full[i]
         danh_sach_vu_goc.append((start, ngay_hl_full[-1]))
 
-    # 2. Xử lý hiển thị với KHOẢNG TRỐNG
+    # 2. Tạo tập dữ liệu liên tục bao gồm cả khoảng nghỉ
     all_ngay_str = sorted(thong_ke_full.keys())
-    if not all_ngay_str: st.stop()
-    
-    min_date = datetime.strptime(all_ngay_str[0], "%Y-%m-%d").date()
-    max_date = datetime.strptime(all_ngay_str[-1], "%Y-%m-%d").date()
-    
-    # Ghi đè bằng lọc tùy chọn nếu có
-    start_view = ngay_bat_dau if ngay_bat_dau else min_date
-    end_view = ngay_ket_thuc if ngay_ket_thuc else max_date
-    
-    # Tạo danh sách ngày liên tục (để thấy được khoảng nghỉ)
-    data_with_gaps = {}
-    curr = start_view
-    while curr <= end_view:
-        d_str = curr.strftime("%Y-%m-%d")
-        if d_str in thong_ke_full:
-            data_with_gaps[d_str] = {'val': thong_ke_full[d_str], 'dur': thoi_gian_full[d_str]}
-        else:
-            data_with_gaps[d_str] = None # Đánh dấu ngày không có dữ liệu
-        curr += timedelta(days=1)
+    if all_ngay_str:
+        min_d = ngay_bat_dau if ngay_bat_dau else datetime.strptime(all_ngay_str[0], "%Y-%m-%d").date()
+        max_d = ngay_ket_thuc if ngay_ket_thuc else datetime.strptime(all_ngay_str[-1], "%Y-%m-%d").date()
+        
+        data_display = {}
+        curr = min_d
+        while curr <= max_d:
+            d_str = curr.strftime("%Y-%m-%d")
+            if d_str in thong_ke_full:
+                data_display[d_str] = {'val': thong_ke_full[d_str], 'dur': thoi_gian_full[d_str]}
+            else:
+                data_display[d_str] = None
+            curr += timedelta(days=1)
 
-    # Hiển thị
-    tabs = st.tabs([t for t, c in zip(["💧 Lần tưới", "🧪 TBEC", "📋 EC Req"], [chon_c1, chon_c2, chon_c3]) if c])
-    tab_idx = 0
-    
-    if chon_c1:
-        with tabs[tab_idx]:
-            ngay_hien_thi = list(data_with_gaps.keys())
-            ds_gd = chia_giai_doan_tu_dong(ngay_hien_thi, data_with_gaps, 'val', ss_c1)
-            # Tính giá trị ảo cho giai đoạn
-            for gd in ds_gd:
-                avg = round(np.mean([data_with_gaps[d]['val'] for d in gd]))
-                for d in gd: data_with_gaps[d]['gia_tri_ao'] = avg
-            
-            ve_bieu_do_doc(data_with_gaps, ds_gd, "Biểu đồ Lần tưới (Có khoảng nghỉ giữa các vụ)", 'val')
-            
-            # Bảng chi tiết (Chỉ hiện ngày có dữ liệu)
-            res = []
-            for n in ngay_hien_thi:
-                if data_with_gaps[n] is not None:
-                    tv, nt = xac_dinh_vi_tri_vu(n, danh_sach_vu_goc)
-                    m, s = int(data_with_gaps[n]['dur']//60), int(data_with_gaps[n]['dur']%60)
-                    res.append({"Ngày": n, "Vị trí": tv, "Ngày thứ": nt, "Lần": data_with_gaps[n]['val'], "TG": f"{m:02d}:{s:02d}"})
-            st.table(res)
+        tabs = st.tabs([t for t, c in zip(["💧 Lần tưới", "🧪 TBEC", "📋 EC Req"], [chon_c1, chon_c2, chon_c3]) if c])
+        tab_idx = 0
+        
+        if chon_c1:
+            with tabs[tab_idx]:
+                ngay_list = list(data_display.keys())
+                ds_gd = chia_giai_doan_tu_dong(ngay_list, data_display, 'val', ss_c1)
+                for gd in ds_gd:
+                    avg = round(np.mean([data_display[d]['val'] for d in gd]))
+                    for d in gd: data_display[d]['gia_tri_ao'] = avg
+                
+                ve_bieu_do_doc(data_display, ds_gd, "Biểu đồ Lần tưới", 'val')
+                
+                # Bảng kết quả bên dưới
+                res = []
+                for n in ngay_list:
+                    if data_display[n]:
+                        v, nt = xac_dinh_vi_tri_vu(n, danh_sach_vu_goc)
+                        m, s = int(data_display[n]['dur']//60), int(data_display[n]['dur']%60)
+                        res.append({"Ngày": n, "Vị trí": v, "Ngày thứ": nt, "Lần": data_display[n]['val'], "TG": f"{m:02d}:{s:02d}"})
+                st.table(res)
