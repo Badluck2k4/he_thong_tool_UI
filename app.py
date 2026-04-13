@@ -16,7 +16,7 @@ GIATRI_GOC = {
     "MIN_VU": 7
 }
 
-st.set_page_config(page_title="Phân tích Mùa vụ Đa biến v4.2", layout="wide")
+st.set_page_config(page_title="Phân tích Mùa vụ Đa biến v4.3", layout="wide")
 
 # --- 2. CÁC HÀM LOGIC ---
 
@@ -31,9 +31,6 @@ def chuyen_doi_so_thuc(du_lieu, danh_sach_khoa):
     return None
 
 def chia_giai_doan_bien_thien_dong_thoi(danh_sach_ngay, du_lieu_tong_hop, cau_hinh_nguong):
-    """
-    Logic: CHỈ NGẮT khi TẤT CẢ các chỉ số theo dõi đều vượt ngưỡng sai số đồng thời.
-    """
     danh_sach_cac_gd = []
     if not danh_sach_ngay:
         return danh_sach_cac_gd
@@ -58,11 +55,9 @@ def chia_giai_doan_bien_thien_dong_thoi(danh_sach_ngay, du_lieu_tong_hop, cau_hi
                     trung_binh_nhom = np.mean(danh_sach_gia_tri_nhom)
                     sai_so = abs(gia_tri_ngay - trung_binh_nhom)
                     
-                    # Kiểm tra vượt ngưỡng
                     vuot = (sai_so > nguong_sai_so and len(nhom_hien_tai) >= 3) or (sai_so > nguong_sai_so * 3)
                     ket_qua_kiem_tra.append(vuot)
 
-        # ĐIỀU KIỆN VÀ (AND): Tất cả các chỉ số phải vượt ngưỡng mới được ngắt
         if ket_qua_kiem_tra and all(ket_qua_kiem_tra):
             danh_sach_cac_gd.append(nhom_hien_tai)
             nhom_hien_tai = [ngay_dang_xet]
@@ -162,10 +157,14 @@ if tep_nho_giot:
         du_lieu_tong_hop = {}
         ngay_vu = sorted([n for n in thong_ke_ngay if v_hien_tai[0] <= datetime.strptime(n, "%Y-%m-%d").date() <= v_hien_tai[1]])
         for n in ngay_vu:
+            # LÀM TRÒN NGAY KHI TÍNH TOÁN TRUNG BÌNH
+            tbec_tb = np.mean(data_cp_ngay[n]['tbec']) if n in data_cp_ngay and data_cp_ngay[n]['tbec'] else 0
+            req_tb = np.mean(data_cp_ngay[n]['req']) if n in data_cp_ngay and data_cp_ngay[n]['req'] else 0
+            
             du_lieu_tong_hop[n] = {
                 'so_lan_tuoi': thong_ke_ngay[n],
-                'tbec': np.mean(data_cp_ngay[n]['tbec']) if n in data_cp_ngay and data_cp_ngay[n]['tbec'] else 0,
-                'ecreq': np.mean(data_cp_ngay[n]['req']) if n in data_cp_ngay and data_cp_ngay[n]['req'] else 0
+                'tbec': round(float(tbec_tb), 2),
+                'ecreq': round(float(req_tb), 2)
             }
 
         nguong_ngat = {'so_lan_tuoi': ss_lan, 'tbec': ss_tbec, 'ecreq': ss_req}
@@ -186,13 +185,12 @@ if tep_nho_giot:
         bang_du_lieu = []
         for i, gd in enumerate(ds_giai_doan):
             for n in gd:
-                # Làm tròn các chỉ số TBEC và EC Yêu cầu đến 2 chữ số thập phân
                 bang_du_lieu.append({
                     "Giai đoạn": i + 1,
                     "Ngày": n,
                     "Số lần tưới": du_lieu_tong_hop[n]['so_lan_tuoi'],
-                    "TBEC": round(du_lieu_tong_hop[n]['tbec'], 2),
-                    "EC Yêu cầu": round(du_lieu_tong_hop[n]['ecreq'], 2)
+                    "TBEC": du_lieu_tong_hop[n]['tbec'],
+                    "EC Yêu cầu": du_lieu_tong_hop[n]['ecreq']
                 })
         st.table(bang_du_lieu)
 else:
