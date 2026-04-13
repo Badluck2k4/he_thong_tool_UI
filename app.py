@@ -148,4 +148,40 @@ if files_nho_giot:
         # CÁCH 2 & 3: CHÂM PHÂN
         if (check_c2 or check_c3):
             if not files_cham_phan:
-                st.warning("⚠️ Bạn
+                st.warning("⚠️ Bạn chưa tải file Châm phân để thực hiện Cách 2 hoặc Cách 3.")
+            else:
+                data_cp = []
+                for f in files_cham_phan:
+                    content = json.load(f)
+                    if isinstance(content, list): data_cp.extend(content)
+                
+                # Lọc dữ liệu châm phân theo mùa vụ
+                stats_cp = {}
+                for item in data_cp:
+                    if str(item.get('STT')) != khu_vuc: continue
+                    dt_obj = datetime.strptime(item['Thời gian'], fmt)
+                    if vu_ht['start'] <= dt_obj.date() <= vu_ht['end']:
+                        d_str = dt_obj.strftime("%Y-%m-%d")
+                        if d_str not in stats_cp: stats_cp[d_str] = {'tbec_l': [], 'req_l': []}
+                        stats_cp[d_str]['tbec_l'].append(float(str(item.get('TBEC',0)).replace(',','.')))
+                        stats_cp[d_str]['req_l'].append(float(str(item.get('EC yêu cầu',0)).replace(',','.')))
+                
+                daily_cp = {d: {'tbec': np.mean(v['tbec_l']), 'ecreq': np.mean(v['req_l'])} for d, v in stats_cp.items()}
+                ngay_cp_sorted = sorted(daily_cp.keys())
+
+                if check_c2:
+                    st.divider()
+                    st.subheader("🧪 Cách 2: Phân chia theo TBEC (Thực tế)")
+                    ds_gd_c2 = chia_giai_doan_tong_quat(ngay_cp_sorted, daily_cp, 'tbec', NGUONG_TBEC)
+                    # Vẽ biểu đồ TBEC (dùng giá trị thực tế)
+                    ve_bieu_do_ngang_da_sac(daily_cp, ds_gd_c2, "Biểu đồ giai đoạn dựa trên TBEC")
+
+                if check_c3:
+                    st.divider()
+                    st.subheader("📋 Cách 3: Phân chia theo EC Yêu cầu (Cài đặt)")
+                    ds_gd_c3 = chia_giai_doan_tong_quat(ngay_cp_sorted, daily_cp, 'ecreq', NGUONG_EC_REQ)
+                    ve_bieu_do_ngang_da_sac(daily_cp, ds_gd_c3, "Biểu đồ giai đoạn dựa trên EC Yêu cầu")
+    else:
+        st.error("Không tìm thấy mùa vụ hợp lệ trong file nhỏ giọt.")
+else:
+    st.info("👋 Chào mừng! Hãy tải file Nhỏ giọt ở thanh bên để bắt đầu.")
