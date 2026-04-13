@@ -16,7 +16,20 @@ GIATRI_GOC = {
     "MIN_VU": 7
 }
 
-st.set_page_config(page_title="Phân tích Mùa vụ Đa biến v5.4", layout="wide")
+st.set_page_config(page_title="Phân tích Mùa vụ Đa biến v5.6", layout="wide")
+
+# --- KHỞI TẠO TRẠNG THÁI (SESSION STATE) CHO TÍNH NĂNG RESET ---
+if 'ss_lan_key' not in st.session_state:
+    st.session_state['ss_lan_key'] = GIATRI_GOC["LAN_TUOI"]
+if 'ss_tbec_key' not in st.session_state:
+    st.session_state['ss_tbec_key'] = GIATRI_GOC["TBEC"]
+if 'ss_req_key' not in st.session_state:
+    st.session_state['ss_req_key'] = GIATRI_GOC["EC_REQ"]
+
+def phuc_hoi_sai_so_mac_dinh():
+    st.session_state['ss_lan_key'] = GIATRI_GOC["LAN_TUOI"]
+    st.session_state['ss_tbec_key'] = GIATRI_GOC["TBEC"]
+    st.session_state['ss_req_key'] = GIATRI_GOC["EC_REQ"]
 
 # --- 2. CÁC HÀM LOGIC ---
 
@@ -78,7 +91,6 @@ def ve_bieu_do_dong_thoi(du_lieu_tong_hop, danh_sach_gd, chi_so_chon):
 
     so_luong_tang = len(chi_so_chon)
     
-    # Giữ kích thước lớn như yêu cầu trước đó
     fig, axes = plt.subplots(so_luong_tang, 1, figsize=(20, 7 * so_luong_tang), sharex=True)
     
     if so_luong_tang == 1: axes = [axes]
@@ -90,9 +102,6 @@ def ve_bieu_do_dong_thoi(du_lieu_tong_hop, danh_sach_gd, chi_so_chon):
         ax.bar(x_labels, data, color=color_list, alpha=0.85, edgecolor='black', linewidth=0.5)
         ax.set_ylabel(title, fontweight='bold', fontsize=16)
         
-        # ĐÃ LOẠI BỎ PHẦN ax.text HIỂN THỊ SỐ TRÊN ĐẦU CỘT
-        
-        # Kẻ ranh giới giai đoạn (Dùng màu đỏ để dễ phân biệt ranh giới)
         for rg in ranh_gioi_gd:
             ax.axvline(x=rg - 0.5, color='red', linestyle='--', alpha=0.8, linewidth=2)
         
@@ -120,7 +129,6 @@ with st.sidebar:
     
     st.divider()
     st.subheader("📊 Chọn chỉ số hiển thị")
-    # THAY ĐỔI: Chuyển sang dạng Tick (Checkbox)
     tick_lan = st.checkbox("Lần tưới", value=True)
     tick_tbec = st.checkbox("TBEC", value=True)
     tick_req = st.checkbox("EC Yêu cầu", value=True)
@@ -132,9 +140,14 @@ with st.sidebar:
 
     st.divider()
     st.subheader("⚙️ Ngưỡng ngắt giai đoạn")
-    ss_lan = st.number_input("Sai số Lần tưới", value=GIATRI_GOC["LAN_TUOI"], step=0.1)
-    ss_tbec = st.number_input("Sai số TBEC", value=GIATRI_GOC["TBEC"], step=0.1)
-    ss_req = st.number_input("Sai số EC Req", value=GIATRI_GOC["EC_REQ"], step=0.1)
+    
+    # THÊM MỚI: Nút Reset gọi hàm phuc_hoi_sai_so_mac_dinh
+    st.button("🔄 Đặt lại mặc định", on_click=phuc_hoi_sai_so_mac_dinh, use_container_width=True)
+    
+    # Gắn các input vào session_state thông qua tham số key
+    ss_lan = st.number_input("Sai số Lần tưới", key="ss_lan_key", step=0.1)
+    ss_tbec = st.number_input("Sai số TBEC", key="ss_tbec_key", step=0.1)
+    ss_req = st.number_input("Sai số EC Req", key="ss_req_key", step=0.1)
 
 if tep_nho_giot:
     du_lieu_tho_ng = []
@@ -143,14 +156,19 @@ if tep_nho_giot:
     khu_vuc = st.sidebar.selectbox("🎯 Chọn khu vực", stt_list)
 
     thong_ke_ngay = {}
+    thoi_gian_ngay = {} 
+    
     data_kv = sorted([d for d in du_lieu_tho_ng if str(d.get('STT')) == khu_vuc], key=lambda x: x['Thời gian'])
     for i in range(len(data_kv)-1):
         if data_kv[i].get('Trạng thái') == "Bật" and data_kv[i+1].get('Trạng thái') == "Tắt":
             t1 = datetime.strptime(data_kv[i]['Thời gian'], "%Y-%m-%d %H-%M-%S")
             t2 = datetime.strptime(data_kv[i+1]['Thời gian'], "%Y-%m-%d %H-%M-%S")
-            if GIATRI_GOC["GIAY_MIN"] <= (t2 - t1).total_seconds() <= GIATRI_GOC["GIAY_MAX"]:
+            thoi_gian_tuoi = (t2 - t1).total_seconds()
+            
+            if GIATRI_GOC["GIAY_MIN"] <= thoi_gian_tuoi <= GIATRI_GOC["GIAY_MAX"]:
                 d_str = t1.strftime("%Y-%m-%d")
                 thong_ke_ngay[d_str] = thong_ke_ngay.get(d_str, 0) + 1
+                thoi_gian_ngay[d_str] = thoi_gian_ngay.get(d_str, 0) + thoi_gian_tuoi
 
     ngay_ok = sorted([datetime.strptime(n, "%Y-%m-%d").date() for n, c in thong_ke_ngay.items() if c >= GIATRI_GOC["LAN_MIN_NGAY"]])
     
@@ -186,8 +204,12 @@ if tep_nho_giot:
         for n in ngay_vu:
             raw_tbec = np.mean(data_cp_ngay[n]['tbec']) if n in data_cp_ngay and data_cp_ngay[n]['tbec'] else 0
             raw_req = np.mean(data_cp_ngay[n]['req']) if n in data_cp_ngay and data_cp_ngay[n]['req'] else 0
+            
+            phut_tuoi = round(thoi_gian_ngay.get(n, 0) / 60, 1)
+            
             du_lieu_tong_hop[n] = {
                 'so_lan_tuoi': thong_ke_ngay[n],
+                'thoi_gian_tuoi_phut': phut_tuoi, 
                 'tbec': float(f"{raw_tbec:.2f}"),
                 'ecreq': float(f"{raw_req:.2f}")
             }
@@ -208,8 +230,11 @@ if tep_nho_giot:
             for i, gd in enumerate(ds_giai_doan):
                 for n in gd:
                     bang_hien_thi.append({
-                        "STT Ngày": dem, "Giai đoạn": i + 1, "Ngày": n,
+                        "STT Ngày": dem, 
+                        "Giai đoạn": i + 1, 
+                        "Ngày": n,
                         "Lần tưới": int(du_lieu_tong_hop[n]['so_lan_tuoi']),
+                        "Thời gian tưới (Phút)": du_lieu_tong_hop[n]['thoi_gian_tuoi_phut'],
                         "TBEC": f"{du_lieu_tong_hop[n]['tbec']:.2f}",
                         "EC Yêu cầu": f"{du_lieu_tong_hop[n]['ecreq']:.2f}"
                     })
