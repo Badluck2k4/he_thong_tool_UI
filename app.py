@@ -16,7 +16,7 @@ GIATRI_GOC = {
     "MIN_VU": 7
 }
 
-st.set_page_config(page_title="Phân tích Mùa vụ Đa biến v4.1", layout="wide")
+st.set_page_config(page_title="Phân tích Mùa vụ Đa biến v4.2", layout="wide")
 
 # --- 2. CÁC HÀM LOGIC ---
 
@@ -73,7 +73,6 @@ def chia_giai_doan_bien_thien_dong_thoi(danh_sach_ngay, du_lieu_tong_hop, cau_hi
     return danh_sach_cac_gd
 
 def ve_bieu_do_cot_ngang(du_lieu_bieu_do, danh_sach_gd, tieu_de, khoa_gia_tri):
-    # Sắp xếp ngày ngược để biểu đồ đi từ trên xuống dưới
     cac_ngay_dao = sorted(du_lieu_bieu_do.keys(), reverse=True)
     ngay_co_so = [n for n in cac_ngay_dao if du_lieu_bieu_do[n].get(khoa_gia_tri) is not None]
     
@@ -82,7 +81,6 @@ def ve_bieu_do_cot_ngang(du_lieu_bieu_do, danh_sach_gd, tieu_de, khoa_gia_tri):
 
     gia_tri_hien_thi = [du_lieu_bieu_do[n][khoa_gia_tri] for n in ngay_co_so]
     
-    # Bảng màu cho các giai đoạn
     bang_mau = ['#2E7D32', '#1565C0', '#C62828', '#AD1457', '#6A1B9A', '#00838F', '#283593']
     mau_cot = []
     for ngay in ngay_co_so:
@@ -122,7 +120,6 @@ if tep_nho_giot:
     stt_list = sorted(list(set(str(d.get('STT')) for d in du_lieu_tho_ng if d.get('STT'))))
     khu_vuc = st.sidebar.selectbox("🎯 Chọn khu vực (STT)", stt_list)
 
-    # A. Xử lý Lần tưới
     thong_ke_ngay = {}
     data_kv = sorted([d for d in du_lieu_tho_ng if str(d.get('STT')) == khu_vuc], key=lambda x: x['Thời gian'])
     for i in range(len(data_kv)-1):
@@ -136,7 +133,6 @@ if tep_nho_giot:
     ngay_ok = sorted([datetime.strptime(n, "%Y-%m-%d").date() for n, c in thong_ke_ngay.items() if c >= GIATRI_GOC["LAN_MIN_NGAY"]])
     
     if ngay_ok:
-        # Tách mùa vụ
         danh_sach_vu = []
         start = ngay_ok[0]
         for i in range(1, len(ngay_ok)):
@@ -149,7 +145,6 @@ if tep_nho_giot:
         chon_vu = st.selectbox("📅 Chọn mùa vụ", [f"Vụ {i+1}: {v[0]} đến {v[1]}" for i, v in enumerate(danh_sach_vu)])
         v_hien_tai = danh_sach_vu[int(chon_vu.split(':')[0].split()[1])-1]
 
-        # B. Xử lý Châm phân
         data_cp_ngay = {}
         if tep_cham_phan:
             for t in tep_cham_phan:
@@ -164,7 +159,6 @@ if tep_nho_giot:
                         if v1: data_cp_ngay[n_str]['tbec'].append(v1)
                         if v2: data_cp_ngay[n_str]['req'].append(v2)
 
-        # C. Hợp nhất dữ liệu (Dùng Dict thuần)
         du_lieu_tong_hop = {}
         ngay_vu = sorted([n for n in thong_ke_ngay if v_hien_tai[0] <= datetime.strptime(n, "%Y-%m-%d").date() <= v_hien_tai[1]])
         for n in ngay_vu:
@@ -174,12 +168,10 @@ if tep_nho_giot:
                 'ecreq': np.mean(data_cp_ngay[n]['req']) if n in data_cp_ngay and data_cp_ngay[n]['req'] else 0
             }
 
-        # D. Chia giai đoạn ĐA BIẾN (Logic AND)
         nguong_ngat = {'so_lan_tuoi': ss_lan, 'tbec': ss_tbec, 'ecreq': ss_req}
         ds_giai_doan = chia_giai_doan_bien_thien_dong_thoi(ngay_vu, du_lieu_tong_hop, nguong_ngat)
 
-        # E. Hiển thị 3 biểu đồ (nhưng chung 1 cách chia giai đoạn)
-        st.write(f"### Phân tích: {len(ds_giai_doan)} giai đoạn (Ngắt khi tất cả cùng biến thiên)")
+        st.write(f"### Phân tích: {len(ds_giai_doan)} giai đoạn")
         
         tab1, tab2, tab3 = st.tabs(["💧 Lần tưới", "🧪 TBEC", "📋 EC Yêu cầu"])
         with tab1:
@@ -194,6 +186,7 @@ if tep_nho_giot:
         bang_du_lieu = []
         for i, gd in enumerate(ds_giai_doan):
             for n in gd:
+                # Làm tròn các chỉ số TBEC và EC Yêu cầu đến 2 chữ số thập phân
                 bang_du_lieu.append({
                     "Giai đoạn": i + 1,
                     "Ngày": n,
