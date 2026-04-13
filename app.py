@@ -2,7 +2,7 @@ import streamlit as st
 import json
 import numpy as np
 import matplotlib.pyplot as plt
-from datetime import datetime
+from datetime import datetime, date
 
 # --- 1. CẤU HÌNH HẰNG SỐ ---
 GIATRI_GOC = {
@@ -11,7 +11,7 @@ GIATRI_GOC = {
     "GAP_NGAY": 2, "MIN_VU": 7
 }
 
-st.set_page_config(page_title="Phân tích Mùa vụ v3.1", layout="wide")
+st.set_page_config(page_title="Phân tích Mùa vụ v3.2", layout="wide")
 
 # --- 2. CÁC HÀM LOGIC ---
 
@@ -57,7 +57,6 @@ def ve_bieu_do_doc(du_lieu_bieu_do, danh_sach_gd, tieu_de, khoa_gia_tri):
     chieu_rong = max(10, len(cac_ngay) * 0.25)
     fig, ax = plt.subplots(figsize=(chieu_rong, 5))
     ax.bar(so_thu_tu, gia_tri_hien_thi, color=mau_cot, alpha=0.8)
-    
     ax.set_title(tieu_de, fontweight='bold', fontsize=14, pad=20)
     ax.set_xlabel("Số thứ tự ngày (STT)", fontsize=10)
     ax.set_xticks(so_thu_tu)
@@ -70,6 +69,11 @@ with st.sidebar:
     tep_nho_giot = st.file_uploader("Tải file Nhỏ giọt", type=['json'], accept_multiple_files=True)
     tep_cham_phan = st.file_uploader("Tải file Châm phân", type=['json'], accept_multiple_files=True)
     
+    st.divider()
+    st.subheader("🔍 Lọc thời gian")
+    ngay_bat_dau = st.date_input("Từ ngày", value=None)
+    ngay_ket_thuc = st.date_input("Đến ngày", value=None)
+
     st.divider()
     st.subheader("🛠 Cách hiển thị")
     chon_c1 = st.checkbox("Cách 1: Lần tưới", value=True)
@@ -96,21 +100,31 @@ if tep_nho_giot:
     stt_list = sorted(list(set(str(d.get('STT')) for d in du_lieu_tho_ng if d.get('STT'))))
     khu_vuc = st.sidebar.selectbox("🎯 Khu vực", stt_list)
 
-    thong_ke_ngay = {}
+    thong_ke_ngay = {} # Lưu số lần tưới
+    thoi_gian_ngay = {} # Lưu tổng thời gian tưới (giây)
+    
     data_kv = sorted([d for d in du_lieu_tho_ng if str(d.get('STT')) == khu_vuc], key=lambda x: x['Thời gian'])
     for i in range(len(data_kv)-1):
         if data_kv[i].get('Trạng thái') == "Bật" and data_kv[i+1].get('Trạng thái') == "Tắt":
             try:
                 t1 = datetime.strptime(data_kv[i]['Thời gian'], "%Y-%m-%d %H-%M-%S")
                 t2 = datetime.strptime(data_kv[i+1]['Thời gian'], "%Y-%m-%d %H-%M-%S")
-                if GIATRI_GOC["GIAY_MIN"] <= (t2-t1).total_seconds() <= GIATRI_GOC["GIAY_MAX"]:
+                dur = (t2-t1).total_seconds()
+                if GIATRI_GOC["GIAY_MIN"] <= dur <= GIATRI_GOC["GIAY_MAX"]:
                     d_str = t1.strftime("%Y-%m-%d")
+                    # Kiểm tra lọc thời gian tùy chọn
+                    curr_date = t1.date()
+                    if (ngay_bat_dau and curr_date < ngay_bat_dau) or (ngay_ket_thuc and curr_date > ngay_ket_thuc):
+                        continue
+                        
                     thong_ke_ngay[d_str] = thong_ke_ngay.get(d_str, 0) + 1
+                    thoi_gian_ngay[d_str] = thoi_gian_ngay.get(d_str, 0) + dur
             except: continue
 
     ngay_hl = sorted([datetime.strptime(n, "%Y-%m-%d").date() for n, c in thong_ke_ngay.items() if c >= GIATRI_GOC["LAN_MIN_NGAY"]])
     
     if ngay_hl:
+        # Tách mùa vụ dựa trên logic gap ngày
         danh_sach_vu = []
         start = ngay_hl[0]
         for i in range(1, len(ngay_hl)):
@@ -120,12 +134,12 @@ if tep_nho_giot:
                 start = ngay_hl[i]
         danh_sach_vu.append((start, ngay_hl[-1]))
 
-        chon_vu_str = st.selectbox("📅 Mùa vụ", [f"Vụ {i+1}: {v[0]} -> {v[1]}" for i, v in enumerate(danh_sach_vu)])
+        chon_vu_str = st.selectbox("📅 Mùa vụ", [f"Khoảng {i+1}: {v[0]} -> {v[1]}" for i, v in enumerate(danh_sach_vu)])
         idx_v = int(chon_vu_str.split(':')[0].split()[1])-1
         v_hien_tai = danh_sach_vu[idx_v]
         
-        tong_ngay = (v_hien_tai[1] - v_hien_tai[0]).days + 1
-        st.info(f"📊 **Thông tin vụ:** Kéo dài **{tong_ngay} ngày** (Từ {v_hien_tai[0]} đến {v_hien_tai[1]})")
+        tong_ngay_vu = (v_hien_tai[1] - v_hien_tai[0]).days + 1
+        st.info(f"📊 **Thông tin vùng lọc:** Kéo dài **{tong_ngay_vu} ngày** (Từ {v_hien_tai[0]} đến {v_hien_tai[1]})")
 
         tabs = st.tabs([t for t, c in zip(["💧 Lần tưới", "🧪 TBEC", "📋 EC Req"], [chon_c1, chon_c2, chon_c3]) if c])
         tab_idx = 0
@@ -133,25 +147,34 @@ if tep_nho_giot:
         if chon_c1:
             with tabs[tab_idx]:
                 ngay_vu = sorted([d for d in thong_ke_ngay if v_hien_tai[0] <= datetime.strptime(d, "%Y-%m-%d").date() <= v_hien_tai[1]])
-                data_c1 = {n: {'val': thong_ke_ngay[n]} for n in ngay_vu}
+                data_c1 = {n: {'val': thong_ke_ngay[n], 'dur': thoi_gian_ngay[n]} for n in ngay_vu}
                 ds_gd = chia_giai_doan_tu_dong(ngay_vu, data_c1, 'val', ss_c1)
                 for gd in ds_gd:
                     avg = round(np.mean([data_c1[d]['val'] for d in gd]))
                     for d in gd: data_c1[d]['gia_tri_ao'] = avg
+                
                 ve_bieu_do_doc(data_c1, ds_gd, "Biểu đồ Lần tưới", 'val')
                 
-                # Hiển thị bảng thủ công không dùng Pandas
                 table_data = []
                 stt_ngay = 1
                 for i, gd in enumerate(ds_gd):
                     for n in gd:
-                        table_data.append({"STT": stt_ngay, "Ngày": n, "Lần tưới": data_c1[n]['val'], "Giai đoạn": i+1})
+                        mins = int(data_c1[n]['dur'] // 60)
+                        secs = int(data_c1[n]['dur'] % 60)
+                        table_data.append({
+                            "STT": stt_ngay, 
+                            "Ngày": n, 
+                            "Lần tưới": data_c1[n]['val'], 
+                            "Tổng thời gian (phút:giây)": f"{mins:02d}:{secs:02d}",
+                            "Giai đoạn": i+1
+                        })
                         stt_ngay += 1
-                st.write("**Bảng chi tiết dữ liệu:**")
+                st.write("**Bảng chi tiết dữ liệu tưới:**")
                 st.table(table_data)
             tab_idx += 1
 
         if (chon_c2 or chon_c3) and tep_cham_phan:
+            # Logic xử lý file châm phân (đã tích hợp lọc thời gian ở trên)
             data_cp_tho = []
             for t in tep_cham_phan: data_cp_tho.extend(json.load(t))
             thong_ke_cp = {}
@@ -159,7 +182,11 @@ if tep_nho_giot:
                 if str(item.get('STT')) != khu_vuc: continue
                 try:
                     dt = datetime.strptime(item['Thời gian'], "%Y-%m-%d %H-%M-%S")
-                    if v_hien_tai[0] <= dt.date() <= v_hien_tai[1]:
+                    curr_d = dt.date()
+                    # Lọc theo Date Input và theo Mùa vụ đã chọn
+                    if (ngay_bat_dau and curr_d < ngay_bat_dau) or (ngay_ket_thuc and curr_d > ngay_ket_thuc):
+                        continue
+                    if v_hien_tai[0] <= curr_d <= v_hien_tai[1]:
                         n_str = dt.strftime("%Y-%m-%d")
                         if n_str not in thong_ke_cp: thong_ke_cp[n_str] = {'tbec': [], 'ecreq': []}
                         v_t = chuyen_doi_so_thuc(item, ['TBEC', 'tbec'])
@@ -167,6 +194,7 @@ if tep_nho_giot:
                         if v_t is not None: thong_ke_cp[n_str]['tbec'].append(v_t)
                         if v_r is not None: thong_ke_cp[n_str]['ecreq'].append(v_r)
                 except: continue
+            
             data_chot_cp = {n: {'tbec': np.mean(v['tbec']), 'ecreq': np.mean(v['ecreq'])} for n, v in thong_ke_cp.items() if v['tbec'] or v['ecreq']}
             ngay_cp = sorted(data_chot_cp.keys())
 
@@ -196,5 +224,5 @@ if tep_nho_giot:
                             stt_ngay += 1
                     st.write("**Bảng chi tiết EC Req:**")
                     st.table(table_data3)
-    else: st.error("Không tìm thấy mùa vụ.")
+    else: st.error("Không tìm thấy dữ liệu trong khoảng thời gian đã chọn.")
 else: st.info("👋 Hãy tải file ở Giao diện 1.")
