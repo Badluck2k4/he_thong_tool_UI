@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-# --- 1. CẤU HÌNH HẰNG SỐ GỐC (Đã cập nhật ngưỡng nhạy hơn) ---
+# --- 1. CẤU HÌNH HẰNG SỐ GỐC ---
 GIATRI_GOC = {
     "LAN_TUOI": 1.0,  # Sai số 1 lần tưới
     "TBEC": 4.0,      # Sai số 4.0 đơn vị
@@ -16,7 +16,7 @@ GIATRI_GOC = {
     "MIN_VU": 7
 }
 
-st.set_page_config(page_title="Phân tích Mùa vụ Đa biến v4.5", layout="wide")
+st.set_page_config(page_title="Phân tích Mùa vụ Đa biến v4.6", layout="wide")
 
 # --- 2. CÁC HÀM LOGIC ---
 
@@ -40,27 +40,21 @@ def chia_giai_doan_bien_thien_dong_thoi(danh_sach_ngay, du_lieu_tong_hop, cau_hi
 
     for i in range(1, len(danh_sach_ngay)):
         ngay_dang_xet = danh_sach_ngay[i]
+        ngay_truoc_do = nhom_hien_tai[-1]  # Lấy trực tiếp ngày liền trước
         ket_qua_kiem_tra = []
         
         for khoa_chi_so, nguong_sai_so in cau_hinh_nguong.items():
-            gia_tri_ngay = du_lieu_tong_hop[ngay_dang_xet].get(khoa_chi_so)
-            if gia_tri_ngay is not None:
-                danh_sach_gia_tri_nhom = [
-                    du_lieu_tong_hop[d][khoa_chi_so] 
-                    for d in nhom_hien_tai 
-                    if du_lieu_tong_hop[d].get(khoa_chi_so) is not None
-                ]
-                if danh_sach_gia_tri_nhom:
-                    # So sánh với trung bình của giai đoạn hiện tại
-                    trung_binh_nhom = np.mean(danh_sach_gia_tri_nhom)
-                    sai_so = abs(gia_tri_ngay - trung_binh_nhom)
-                    
-                    # LOGIC MỚI: Chỉ cần lớn hơn ngưỡng sai số là đánh dấu Vượt (Bỏ kìm hãm số ngày)
-                    vuot = sai_so > nguong_sai_so
-                    ket_qua_kiem_tra.append(vuot)
+            gia_tri_hien_tai = du_lieu_tong_hop[ngay_dang_xet].get(khoa_chi_so)
+            gia_tri_truoc_do = du_lieu_tong_hop[ngay_truoc_do].get(khoa_chi_so)
+            
+            if gia_tri_hien_tai is not None and gia_tri_truoc_do is not None:
+                # LOGIC: Chỉ so sánh sai số với ngày liền trước đó (Day-over-Day)
+                sai_so = abs(gia_tri_hien_tai - gia_tri_truoc_do)
+                vuot = sai_so > nguong_sai_so
+                ket_qua_kiem_tra.append(vuot)
 
-        # CHỈ NGẮT khi tất cả các chỉ số (Lần tưới, TBEC, Req) cùng vượt ngưỡng (Logic AND)
-        if ket_qua_kiem_tra and all(ket_qua_kiem_tra):
+        # Ngắt khi TẤT CẢ các chỉ số đều biến thiên so với ngày hôm qua (Logic AND)
+        if len(ket_qua_kiem_tra) == len(cau_hinh_nguong) and all(ket_qua_kiem_tra):
             danh_sach_cac_gd.append(nhom_hien_tai)
             nhom_hien_tai = [ngay_dang_xet]
         else:
@@ -151,7 +145,7 @@ if tep_nho_giot:
                         if v1 is not None: data_cp_ngay[n_str]['tbec'].append(v1)
                         if v2 is not None: data_cp_ngay[n_str]['req'].append(v2)
 
-        # HỢP NHẤT VÀ LÀM TRÒN TRIỆT ĐỂ
+        # HỢP NHẤT VÀ LÀM TRÒN
         du_lieu_tong_hop = {}
         ngay_vu = sorted([n for n in thong_ke_ngay if v_hien_tai[0] <= datetime.strptime(n, "%Y-%m-%d").date() <= v_hien_tai[1]])
         for n in ngay_vu:
