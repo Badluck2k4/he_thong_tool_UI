@@ -16,7 +16,7 @@ GIATRI_GOC = {
     "MIN_VU": 7
 }
 
-st.set_page_config(page_title="Phân tích Mùa vụ Đa biến v5.0", layout="wide")
+st.set_page_config(page_title="Phân tích Mùa vụ Đa biến v5.2", layout="wide")
 
 # --- 2. CÁC HÀM LOGIC ---
 
@@ -35,11 +35,14 @@ def chia_giai_doan_bien_thien_dong_thoi(danh_sach_ngay, du_lieu_tong_hop, cau_hi
     if not danh_sach_ngay:
         return danh_sach_cac_gd
 
+    if not cau_hinh_nguong:
+        return [danh_sach_ngay]
+
     nhom_hien_tai = [danh_sach_ngay[0]]
 
     for i in range(1, len(danh_sach_ngay)):
         ngay_dang_xet = danh_sach_ngay[i]
-        ngay_truoc_do = nhom_hien_tai[-1]  # Lấy trực tiếp ngày liền trước
+        ngay_truoc_do = nhom_hien_tai[-1]  
         ket_qua_kiem_tra = []
         
         for khoa_chi_so, nguong_sai_so in cau_hinh_nguong.items():
@@ -47,12 +50,10 @@ def chia_giai_doan_bien_thien_dong_thoi(danh_sach_ngay, du_lieu_tong_hop, cau_hi
             gia_tri_truoc_do = du_lieu_tong_hop[ngay_truoc_do].get(khoa_chi_so)
             
             if gia_tri_hien_tai is not None and gia_tri_truoc_do is not None:
-                # So sánh sai số Day-over-Day
                 sai_so = abs(gia_tri_hien_tai - gia_tri_truoc_do)
                 vuot = sai_so > nguong_sai_so
                 ket_qua_kiem_tra.append(vuot)
 
-        # Ngắt khi TẤT CẢ các chỉ số đều biến thiên so với ngày hôm qua
         if len(ket_qua_kiem_tra) == len(cau_hinh_nguong) and all(ket_qua_kiem_tra):
             danh_sach_cac_gd.append(nhom_hien_tai)
             nhom_hien_tai = [ngay_dang_xet]
@@ -62,63 +63,63 @@ def chia_giai_doan_bien_thien_dong_thoi(danh_sach_ngay, du_lieu_tong_hop, cau_hi
     danh_sach_cac_gd.append(nhom_hien_tai)
     return danh_sach_cac_gd
 
-def ve_bieu_do_3_tang(du_lieu_tong_hop, danh_sach_gd):
-    # Sắp xếp ngày tăng dần
+def ve_bieu_do_dong_thoi(du_lieu_tong_hop, danh_sach_gd, chi_so_chon):
     ngay_co_so = sorted(du_lieu_tong_hop.keys())
-    if not ngay_co_so: return
+    if not ngay_co_so or not chi_so_chon: 
+        return
 
-    # Trích xuất dữ liệu
     x_labels = list(range(1, len(ngay_co_so) + 1))
-    lan_tuoi = [du_lieu_tong_hop[n]['so_lan_tuoi'] for n in ngay_co_so]
-    tbec = [du_lieu_tong_hop[n]['tbec'] for n in ngay_co_so]
-    ecreq = [du_lieu_tong_hop[n]['ecreq'] for n in ngay_co_so]
+    
+    map_data = {
+        "Lần tưới": ([du_lieu_tong_hop[n]['so_lan_tuoi'] for n in ngay_co_so], "Lần tưới (Lần)"),
+        "TBEC": ([du_lieu_tong_hop[n]['tbec'] for n in ngay_co_so], "TBEC"),
+        "EC Yêu cầu": ([du_lieu_tong_hop[n]['ecreq'] for n in ngay_co_so], "EC Yêu cầu")
+    }
 
-    # Cấu hình màu sắc và ranh giới giai đoạn
     bang_mau = ['#2E7D32', '#1565C0', '#C62828', '#AD1457', '#6A1B9A', '#00838F', '#283593']
     mau_cot = []
-    ranh_gioi_gd = [] # Lưu vị trí X để kẻ vạch đứng
+    ranh_gioi_gd = [] 
     
     for i, ngay in enumerate(ngay_co_so):
         for idx, gd in enumerate(danh_sach_gd):
             if ngay in gd:
                 mau_cot.append(bang_mau[idx % len(bang_mau)])
-                # Ghi nhận vị trí bắt đầu giai đoạn mới (bỏ qua GD đầu tiên)
                 if ngay == gd[0] and idx > 0:
                     ranh_gioi_gd.append(i + 1)
                 break
 
-    # Khởi tạo khung biểu đồ 3 tầng dùng chung trục X
-    chieu_rong = max(12, len(ngay_co_so) * 0.6)
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(chieu_rong, 12), sharex=True)
-    fig.suptitle("Biến thiên Đồng thời: Lần tưới - TBEC - EC Yêu cầu", fontsize=16, fontweight='bold', y=0.98)
+    so_luong_tang = len(chi_so_chon)
+    
+    # ĐIỀU CHỈNH KÍCH THƯỚC Ở ĐÂY: Tăng chiều rộng cơ sở và hệ số chiều rộng, tăng chiều cao mỗi tầng lên 5
+    chieu_rong = max(16, len(ngay_co_so) * 0.8)
+    fig, axes = plt.subplots(so_luong_tang, 1, figsize=(chieu_rong, 5 * so_luong_tang), sharex=True)
+    
+    if so_luong_tang == 1:
+        axes = [axes]
+        
+    tieu_de_chinh = f"Biến thiên Đồng thời: {' - '.join(chi_so_chon)}"
+    fig.suptitle(tieu_de_chinh, fontsize=18, fontweight='bold', y=0.98) # Tăng font title lên một chút cho cân đối
 
-    # Hàm phụ để vẽ cho từng tầng
     def ve_tung_tang(ax, data, title, color_list):
         ax.bar(x_labels, data, color=color_list, alpha=0.85)
-        ax.set_ylabel(title, fontweight='bold')
-        # Điền số trị giá trên đỉnh cột
+        ax.set_ylabel(title, fontweight='bold', fontsize=12) # Tăng font label trục Y
         for i, v in enumerate(data):
-            ax.text(x_labels[i], v + (max(data)*0.02), f" {v:.2f}", ha='center', va='bottom', fontsize=9, rotation=45)
-        # Kẻ ranh giới dọc bằng nét đứt
+            ax.text(x_labels[i], v + (max(data)*0.02), f" {v:.2f}", ha='center', va='bottom', fontsize=10, rotation=45) # Tăng font số liệu
         for rg in ranh_gioi_gd:
             ax.axvline(x=rg - 0.5, color='gray', linestyle='--', alpha=0.7)
         ax.grid(axis='y', linestyle=':', alpha=0.5)
-        # Tăng lề trên một chút để chữ không bị cắt
-        ax.set_ylim(0, max(data) * 1.25)
+        ax.set_ylim(0, max(data) * 1.25 if max(data) > 0 else 1)
 
-    # Thực thi vẽ 3 tầng
-    ve_tung_tang(ax1, lan_tuoi, "Lần tưới (Lần)", mau_cot)
-    ve_tung_tang(ax2, tbec, "TBEC", mau_cot)
-    ve_tung_tang(ax3, ecreq, "EC Yêu cầu", mau_cot)
+    for idx, ten_chi_so in enumerate(chi_so_chon):
+        data, title = map_data[ten_chi_so]
+        ve_tung_tang(axes[idx], data, title, mau_cot)
 
-    # Cấu hình trục X ở tầng dưới cùng
-    ax3.set_xticks(x_labels)
-    ax3.set_xticklabels(x_labels)
-    ax3.set_xlabel("Số thứ tự Ngày", fontweight='bold', fontsize=11)
+    axes[-1].set_xticks(x_labels)
+    axes[-1].set_xticklabels(x_labels, fontsize=11)
+    axes[-1].set_xlabel("Số thứ tự Ngày", fontweight='bold', fontsize=12)
 
     plt.tight_layout()
-    # Căn chỉnh để nhường chỗ cho suptitle
-    plt.subplots_adjust(top=0.93)
+    plt.subplots_adjust(top=0.92 if so_luong_tang > 1 else 0.88)
     st.pyplot(fig)
 
 # --- 3. GIAO DIỆN CHÍNH ---
@@ -126,6 +127,12 @@ with st.sidebar:
     st.header("📂 Dữ liệu & Cấu hình")
     tep_nho_giot = st.file_uploader("Tải file Nhỏ giọt", type=['json'], accept_multiple_files=True)
     tep_cham_phan = st.file_uploader("Tải file Châm phân", type=['json'], accept_multiple_files=True)
+    
+    st.divider()
+    st.subheader("📊 Chọn chỉ số phân tích")
+    danh_sach_chi_so = ["Lần tưới", "TBEC", "EC Yêu cầu"]
+    chi_so_chon = st.multiselect("Chỉ số cần xét", danh_sach_chi_so, default=danh_sach_chi_so)
+
     st.divider()
     st.subheader("⚙️ Ngưỡng ngắt GD (Đồng thời)")
     ss_lan = st.number_input("Sai số Lần tưới", value=GIATRI_GOC["LAN_TUOI"], step=0.1)
@@ -138,7 +145,6 @@ if tep_nho_giot:
     stt_list = sorted(list(set(str(d.get('STT')) for d in du_lieu_tho_ng if d.get('STT'))))
     khu_vuc = st.sidebar.selectbox("🎯 Chọn khu vực", stt_list)
 
-    # Xử lý Nhỏ giọt
     thong_ke_ngay = {}
     data_kv = sorted([d for d in du_lieu_tho_ng if str(d.get('STT')) == khu_vuc], key=lambda x: x['Thời gian'])
     for i in range(len(data_kv)-1):
@@ -190,29 +196,35 @@ if tep_nho_giot:
                 'ecreq': float(f"{raw_req:.2f}")
             }
 
-        nguong_ngat = {'so_lan_tuoi': ss_lan, 'tbec': ss_tbec, 'ecreq': ss_req}
-        ds_giai_doan = chia_giai_doan_bien_thien_dong_thoi(ngay_vu, du_lieu_tong_hop, nguong_ngat)
+        if len(chi_so_chon) == 0:
+            st.warning("⚠️ Vui lòng chọn ít nhất 1 chỉ số ở thanh bên trái để phân tích.")
+        else:
+            nguong_ngat = {}
+            if "Lần tưới" in chi_so_chon: nguong_ngat['so_lan_tuoi'] = ss_lan
+            if "TBEC" in chi_so_chon: nguong_ngat['tbec'] = ss_tbec
+            if "EC Yêu cầu" in chi_so_chon: nguong_ngat['ecreq'] = ss_req
 
-        st.write(f"### Kết quả phân tích: {len(ds_giai_doan)} giai đoạn")
-        
-        # Chỉ gọi hàm vẽ biểu đồ 3 tầng duy nhất
-        ve_bieu_do_3_tang(du_lieu_tong_hop, ds_giai_doan)
+            ds_giai_doan = chia_giai_doan_bien_thien_dong_thoi(ngay_vu, du_lieu_tong_hop, nguong_ngat)
 
-        st.divider()
-        st.write("### Chi tiết số liệu")
-        bang_hien_thi = []
-        dem_ngay = 1
-        for i, gd in enumerate(ds_giai_doan):
-            for n in gd:
-                bang_hien_thi.append({
-                    "STT Ngày": dem_ngay,
-                    "Giai đoạn": i + 1,
-                    "Ngày": n,
-                    "Số lần tưới": int(du_lieu_tong_hop[n]['so_lan_tuoi']),
-                    "TBEC": f"{du_lieu_tong_hop[n]['tbec']:.2f}",
-                    "EC Yêu cầu": f"{du_lieu_tong_hop[n]['ecreq']:.2f}"
-                })
-                dem_ngay += 1
-        st.table(bang_hien_thi)
+            st.write(f"### Kết quả phân tích: {len(ds_giai_doan)} giai đoạn")
+            
+            ve_bieu_do_dong_thoi(du_lieu_tong_hop, ds_giai_doan, chi_so_chon)
+
+            st.divider()
+            st.write("### Chi tiết số liệu")
+            bang_hien_thi = []
+            dem_ngay = 1
+            for i, gd in enumerate(ds_giai_doan):
+                for n in gd:
+                    bang_hien_thi.append({
+                        "STT Ngày": dem_ngay,
+                        "Giai đoạn": i + 1,
+                        "Ngày": n,
+                        "Số lần tưới": int(du_lieu_tong_hop[n]['so_lan_tuoi']),
+                        "TBEC": f"{du_lieu_tong_hop[n]['tbec']:.2f}",
+                        "EC Yêu cầu": f"{du_lieu_tong_hop[n]['ecreq']:.2f}"
+                    })
+                    dem_ngay += 1
+            st.table(bang_hien_thi)
 else:
     st.info("👋 Vui lòng tải dữ liệu.")
