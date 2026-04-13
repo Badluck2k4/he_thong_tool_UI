@@ -16,7 +16,7 @@ GIATRI_GOC = {
     "MIN_VU": 7
 }
 
-st.set_page_config(page_title="Phân tích Mùa vụ Đa biến v5.3", layout="wide")
+st.set_page_config(page_title="Phân tích Mùa vụ Đa biến v5.4", layout="wide")
 
 # --- 2. CÁC HÀM LOGIC ---
 
@@ -78,8 +78,7 @@ def ve_bieu_do_dong_thoi(du_lieu_tong_hop, danh_sach_gd, chi_so_chon):
 
     so_luong_tang = len(chi_so_chon)
     
-    # ĐIỀU CHỈNH KÍCH THƯỚC MỚI: 
-    # Chiều rộng 20 (to hơn chuẩn), Chiều cao 7 inch mỗi tầng (rất cao để nhìn rõ cột)
+    # Giữ kích thước lớn như yêu cầu trước đó
     fig, axes = plt.subplots(so_luong_tang, 1, figsize=(20, 7 * so_luong_tang), sharex=True)
     
     if so_luong_tang == 1: axes = [axes]
@@ -88,28 +87,24 @@ def ve_bieu_do_dong_thoi(du_lieu_tong_hop, danh_sach_gd, chi_so_chon):
                  fontsize=24, fontweight='bold', y=0.96)
 
     def ve_tung_tang(ax, data, title, color_list):
-        bars = ax.bar(x_labels, data, color=color_list, alpha=0.85, edgecolor='black', linewidth=0.5)
+        ax.bar(x_labels, data, color=color_list, alpha=0.85, edgecolor='black', linewidth=0.5)
         ax.set_ylabel(title, fontweight='bold', fontsize=16)
         
-        # Tăng kích thước chữ số trên đầu cột
-        max_val = max(data) if data and max(data) > 0 else 1
-        for i, v in enumerate(data):
-            ax.text(x_labels[i], v + (max_val * 0.01), f"{v:g}", 
-                    ha='center', va='bottom', fontsize=13, fontweight='bold', rotation=0)
+        # ĐÃ LOẠI BỎ PHẦN ax.text HIỂN THỊ SỐ TRÊN ĐẦU CỘT
         
-        # Kẻ ranh giới giai đoạn
+        # Kẻ ranh giới giai đoạn (Dùng màu đỏ để dễ phân biệt ranh giới)
         for rg in ranh_gioi_gd:
             ax.axvline(x=rg - 0.5, color='red', linestyle='--', alpha=0.8, linewidth=2)
         
         ax.grid(axis='y', linestyle=':', alpha=0.6)
         ax.tick_params(axis='y', labelsize=14)
-        ax.set_ylim(0, max_val * 1.15)
+        max_val = max(data) if data and max(data) > 0 else 1
+        ax.set_ylim(0, max_val * 1.1)
 
     for idx, ten_chi_so in enumerate(chi_so_chon):
         data, title = map_data[ten_chi_so]
         ve_tung_tang(axes[idx], data, title, mau_cot)
 
-    # Cấu hình trục X cuối cùng
     axes[-1].set_xticks(x_labels)
     axes[-1].set_xticklabels(x_labels, fontsize=14, fontweight='bold')
     axes[-1].set_xlabel("SỐ THỨ TỰ NGÀY", fontweight='bold', fontsize=16, labelpad=15)
@@ -124,9 +119,16 @@ with st.sidebar:
     tep_cham_phan = st.file_uploader("Tải file Châm phân", type=['json'], accept_multiple_files=True)
     
     st.divider()
-    st.subheader("📊 Chọn chỉ số phân tích")
-    danh_sach_chi_so = ["Lần tưới", "TBEC", "EC Yêu cầu"]
-    chi_so_chon = st.multiselect("Chỉ số hiển thị trên biểu đồ", danh_sach_chi_so, default=danh_sach_chi_so)
+    st.subheader("📊 Chọn chỉ số hiển thị")
+    # THAY ĐỔI: Chuyển sang dạng Tick (Checkbox)
+    tick_lan = st.checkbox("Lần tưới", value=True)
+    tick_tbec = st.checkbox("TBEC", value=True)
+    tick_req = st.checkbox("EC Yêu cầu", value=True)
+    
+    chi_so_chon = []
+    if tick_lan: chi_so_chon.append("Lần tưới")
+    if tick_tbec: chi_so_chon.append("TBEC")
+    if tick_req: chi_so_chon.append("EC Yêu cầu")
 
     st.divider()
     st.subheader("⚙️ Ngưỡng ngắt giai đoạn")
@@ -190,10 +192,9 @@ if tep_nho_giot:
                 'ecreq': float(f"{raw_req:.2f}")
             }
 
-        if len(chi_so_chon) == 0:
-            st.warning("⚠️ Chọn ít nhất 1 chỉ số để xem biểu đồ.")
+        if not chi_so_chon:
+            st.warning("⚠️ Hãy chọn ít nhất một chỉ số để hiển thị biểu đồ.")
         else:
-            # Ngưỡng ngắt tính dựa trên TOÀN BỘ 3 chỉ số để đảm bảo chia GD chuẩn
             nguong_ngat_full = {'so_lan_tuoi': ss_lan, 'tbec': ss_tbec, 'ecreq': ss_req}
             ds_giai_doan = chia_giai_doan_bien_thien_dong_thoi(ngay_vu, du_lieu_tong_hop, nguong_ngat_full)
 
