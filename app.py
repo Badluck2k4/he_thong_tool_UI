@@ -4,11 +4,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-# --- 1. CẤU HÌNH HẰNG SỐ GỐC ---
+# --- 1. CẤU HÌNH HẰNG SỐ GỐC (Đã cập nhật ngưỡng nhạy hơn) ---
 GIATRI_GOC = {
-    "LAN_TUOI": 2.5,
-    "TBEC": 8.0,
-    "EC_REQ": 5.0,
+    "LAN_TUOI": 1.0,  # Sai số 1 lần tưới
+    "TBEC": 4.0,      # Sai số 4.0 đơn vị
+    "EC_REQ": 2.0,    # Sai số 2.0 đơn vị
     "GIAY_MIN": 20,
     "GIAY_MAX": 3600,
     "LAN_MIN_NGAY": 5,
@@ -16,7 +16,7 @@ GIATRI_GOC = {
     "MIN_VU": 7
 }
 
-st.set_page_config(page_title="Phân tích Mùa vụ Đa biến v4.4", layout="wide")
+st.set_page_config(page_title="Phân tích Mùa vụ Đa biến v4.5", layout="wide")
 
 # --- 2. CÁC HÀM LOGIC ---
 
@@ -51,13 +51,15 @@ def chia_giai_doan_bien_thien_dong_thoi(danh_sach_ngay, du_lieu_tong_hop, cau_hi
                     if du_lieu_tong_hop[d].get(khoa_chi_so) is not None
                 ]
                 if danh_sach_gia_tri_nhom:
+                    # So sánh với trung bình của giai đoạn hiện tại
                     trung_binh_nhom = np.mean(danh_sach_gia_tri_nhom)
                     sai_so = abs(gia_tri_ngay - trung_binh_nhom)
-                    # Logic AND: Vượt ngưỡng sai số
-                    vuot = (sai_so > nguong_sai_so and len(nhom_hien_tai) >= 3) or (sai_so > nguong_sai_so * 3)
+                    
+                    # LOGIC MỚI: Chỉ cần lớn hơn ngưỡng sai số là đánh dấu Vượt (Bỏ kìm hãm số ngày)
+                    vuot = sai_so > nguong_sai_so
                     ket_qua_kiem_tra.append(vuot)
 
-        # CHỈ NGẮT khi tất cả các chỉ số (Lần tưới, TBEC, Req) cùng vượt ngưỡng
+        # CHỈ NGẮT khi tất cả các chỉ số (Lần tưới, TBEC, Req) cùng vượt ngưỡng (Logic AND)
         if ket_qua_kiem_tra and all(ket_qua_kiem_tra):
             danh_sach_cac_gd.append(nhom_hien_tai)
             nhom_hien_tai = [ngay_dang_xet]
@@ -96,6 +98,7 @@ with st.sidebar:
     tep_nho_giot = st.file_uploader("Tải file Nhỏ giọt", type=['json'], accept_multiple_files=True)
     tep_cham_phan = st.file_uploader("Tải file Châm phân", type=['json'], accept_multiple_files=True)
     st.divider()
+    st.subheader("⚙️ Ngưỡng ngắt GD (Đồng thời)")
     ss_lan = st.number_input("Sai số Lần tưới", value=GIATRI_GOC["LAN_TUOI"], step=0.1)
     ss_tbec = st.number_input("Sai số TBEC", value=GIATRI_GOC["TBEC"], step=0.1)
     ss_req = st.number_input("Sai số EC Req", value=GIATRI_GOC["EC_REQ"], step=0.1)
@@ -155,7 +158,7 @@ if tep_nho_giot:
             raw_tbec = np.mean(data_cp_ngay[n]['tbec']) if n in data_cp_ngay and data_cp_ngay[n]['tbec'] else 0
             raw_req = np.mean(data_cp_ngay[n]['req']) if n in data_cp_ngay and data_cp_ngay[n]['req'] else 0
             
-            # Ép làm tròn 2 chữ số ngay tại đây
+            # Ép kiểu float với 2 chữ số thập phân cho việc vẽ biểu đồ
             du_lieu_tong_hop[n] = {
                 'so_lan_tuoi': thong_ke_ngay[n],
                 'tbec': float(f"{raw_tbec:.2f}"),
@@ -174,8 +177,8 @@ if tep_nho_giot:
         with t3: ve_bieu_do_cot_ngang(du_lieu_tong_hop, ds_giai_doan, "EC Yêu cầu", 'ecreq')
 
         st.divider()
-        st.write("### Chi tiết số liệu (Làm tròn 0.00)")
-        # Hiển thị bảng với định dạng ép kiểu chuỗi để chắc chắn không bị tự làm dài số
+        st.write("### Chi tiết số liệu")
+        # Hiển thị bảng với định dạng ép kiểu chuỗi để đảm bảo Streamlit không tự thêm số 0
         bang_hien_thi = []
         for i, gd in enumerate(ds_giai_doan):
             for n in gd:
