@@ -172,8 +172,6 @@ def chia_giai_doan_bien_thien_dong_thoi(danh_sach_ngay, du_lieu_tong_hop, cau_hi
 # =====================================================================
 # PHẦN 3: LÕI VẼ BIỂU ĐỒ (TRẠM TRANG TRÍ MÓN ĂN)
 # =====================================================================
-# Vai trò cốt lõi: Chuyên gia hội họa. Biến con số thành hình ảnh trực quan.
-# Nhiệm vụ: Nhận dữ liệu "đã chín", dùng matplotlib để vẽ đồ thị, kẻ vạch phân cách.
 
 def ve_bieu_do_dong_thoi(du_lieu_tong_hop, danh_sach_gd, chi_so_chon):
     # Khởi tạo khung tranh
@@ -183,17 +181,16 @@ def ve_bieu_do_dong_thoi(du_lieu_tong_hop, danh_sach_gd, chi_so_chon):
         return fig
 
     so_tang = len(chi_so_chon)
-    fig, axes = plt.subplots(so_tang, 1, figsize=(12, 4 * so_tang), sharex=True)
+    # Tăng figsize chiều ngang từ 12 lên 16 để biểu đồ dài ra, thoáng hơn
+    fig, axes = plt.subplots(so_tang, 1, figsize=(16, 4 * so_tang), sharex=True)
     if so_tang == 1: axes = [axes] 
     
     # Gom tất cả các ngày vào 1 trục X liên tục (Danh sách ngày thật)
     truc_x_that = []
     for gd in danh_sach_gd: truc_x_that.extend(gd)
         
-    # --- ĐOẠN THAY ĐỔI: Dịch ngày thật sang "Ngày 1, Ngày 2..." ---
-    nhan_truc_x = [f"{i+1}" for i in range(len(truc_x_that))]
-    tu_dien_ngay = dict(zip(truc_x_that, nhan_truc_x)) # Tạo ánh xạ để lát nữa vẽ vạch đỏ cho đúng
-    # ----------------------------------------------------------------
+    # Tạo trục X dạng số đếm (0, 1, 2...) để Matplotlib dễ xử lý giãn cách
+    x_indices = np.arange(len(truc_x_that))
     
     map_key = {"Lần tưới": "so_lan_tuoi", "TBEC": "tbec", "EC Yêu cầu": "ecreq"}
     
@@ -202,8 +199,8 @@ def ve_bieu_do_dong_thoi(du_lieu_tong_hop, danh_sach_gd, chi_so_chon):
         key_du_lieu = map_key[chi_so]
         truc_y = [du_lieu_tong_hop[ngay][key_du_lieu] for ngay in truc_x_that]
         
-        # Vẽ cột: Sử dụng nhãn "Ngày 1, Ngày 2..." thay vì ngày thật
-        ax.bar(nhan_truc_x, truc_y, color='skyblue', edgecolor='black')
+        # Vẽ cột dựa trên trục X dạng số
+        ax.bar(x_indices, truc_y, color='skyblue', edgecolor='black')
         ax.set_ylabel(chi_so, fontsize=12)
         ax.grid(axis='y', linestyle='--', alpha=0.7)
         
@@ -211,16 +208,25 @@ def ve_bieu_do_dong_thoi(du_lieu_tong_hop, danh_sach_gd, chi_so_chon):
         if len(danh_sach_gd) > 1:
             for gd in danh_sach_gd[:-1]:
                 ngay_cuoi_gd = gd[-1]
-                # Dịch ngày cuối của giai đoạn thành chuỗi "Ngày X" tương ứng
-                vi_tri_cat = tu_dien_ngay[ngay_cuoi_gd] 
+                # Tìm vị trí (index) của ngày cuối giai đoạn để kẻ vạch
+                vi_tri_cat = truc_x_that.index(ngay_cuoi_gd) 
                 ax.axvline(x=vi_tri_cat, color='red', linestyle='--', linewidth=2)
                 
-    # Xoay chữ ở trục X 45 độ cho đỡ bị đè lên nhau
-    plt.xticks(rotation=0, ha='center')
-    fig.subplots_adjust(hspace=0.5)
+    # --- XỬ LÝ NHÃN TRỤC X KHÔNG BỊ ĐÈ ---
+    # Tính toán bước nhảy: Nếu có quá 30 ngày, hệ thống tự động nhảy cách 2, 3 ngày để in nhãn
+    buoc_nhay = max(1, len(truc_x_that) // 30) 
+    
+    # Lọc ra các vị trí sẽ hiển thị nhãn và tạo nhãn tương ứng (Cộng 1 để thành Ngày 1, 2, 3...)
+    vi_tri_hien_thi = x_indices[::buoc_nhay]
+    nhan_hien_thi = [str(idx + 1) for idx in vi_tri_hien_thi]
+    
+    # Ép buộc in số thẳng đứng (rotation=0) tại các vị trí đã lọc
+    plt.xticks(vi_tri_hien_thi, nhan_hien_thi, rotation=0, ha='center', fontsize=10)
+    
+    # Tạo khoảng trống giữa các tầng biểu đồ (nếu vẽ > 1 chỉ số)
+    fig.subplots_adjust(hspace=0.4) 
+    
     return fig
-
-
 # =====================================================================
 # PHẦN 4: GIAO DIỆN NGƯỜI DÙNG (SÂN KHẤU VÀ BỒI BÀN)
 # =====================================================================
