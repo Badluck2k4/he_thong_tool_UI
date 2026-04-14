@@ -90,7 +90,7 @@ def tim_kiem_mua_vu(thong_ke_ngay):
         start = ngay_ok[0]
         for i in range(1, len(ngay_ok)):
             # Nếu chênh lệch giữa 2 ngày lớn hơn mức cho phép -> Cắt vụ
-            if (ngay_ok[i] - ngay_ok[i-1]).days > GIATRI_GOC["GAP_NGAY"]:
+            if (ngay_ok[i] - ngay_ok[i-1]).days > GIATRI_GOC["GAP_NGAY"]: 
                 # Kiểm tra xem vụ này có đủ dài để công nhận không
                 if (ngay_ok[i-1] - start).days + 1 >= GIATRI_GOC["MIN_VU"]:
                     danh_sach_vu.append((start, ngay_ok[i-1]))
