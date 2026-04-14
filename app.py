@@ -174,43 +174,46 @@ def chia_giai_doan_bien_thien_dong_thoi(danh_sach_ngay, du_lieu_tong_hop, cau_hi
 # =====================================================================
 # Vai trò cốt lõi: Chuyên gia hội họa. Biến con số thành hình ảnh trực quan.
 # Nhiệm vụ: Nhận dữ liệu "đã chín", dùng matplotlib để vẽ đồ thị, kẻ vạch phân cách.
-# Nguyên tắc: Họa sĩ chỉ vẽ theo đúng dữ liệu được giao, KHÔNG tự ý tính toán 
-# hay sửa đổi số liệu ở đây.
 
 def ve_bieu_do_dong_thoi(du_lieu_tong_hop, danh_sach_gd, chi_so_chon):
-    # Khởi tạo khung tranh (nếu người dùng chưa chọn gì thì báo lỗi nhẹ nhàng)
+    # Khởi tạo khung tranh
     if not chi_so_chon or not danh_sach_gd:
         fig, ax = plt.subplots(figsize=(10, 5))
         ax.text(0.5, 0.5, 'Chưa có chỉ số nào được chọn để vẽ', ha='center', va='center')
         return fig
 
     so_tang = len(chi_so_chon)
-    # Tạo các tầng biểu đồ dựa trên số lượng chỉ số được tick
     fig, axes = plt.subplots(so_tang, 1, figsize=(12, 4 * so_tang), sharex=True)
-    if so_tang == 1: axes = [axes] # Đảm bảo luôn là list để code lặp không bị lỗi
+    if so_tang == 1: axes = [axes] 
     
-    # Gom tất cả các ngày vào 1 trục X liên tục
-    truc_x = []
-    for gd in danh_sach_gd: truc_x.extend(gd)
+    # Gom tất cả các ngày vào 1 trục X liên tục (Danh sách ngày thật)
+    truc_x_that = []
+    for gd in danh_sach_gd: truc_x_that.extend(gd)
+        
+    # --- ĐOẠN THAY ĐỔI: Dịch ngày thật sang "Ngày 1, Ngày 2..." ---
+    nhan_truc_x = [f"Ngày {i+1}" for i in range(len(truc_x_that))]
+    tu_dien_ngay = dict(zip(truc_x_that, nhan_truc_x)) # Tạo ánh xạ để lát nữa vẽ vạch đỏ cho đúng
+    # ----------------------------------------------------------------
     
-    # Từ điển dịch tên hiển thị sang tên biến (Key) trong Sổ Cái
     map_key = {"Lần tưới": "so_lan_tuoi", "TBEC": "tbec", "EC Yêu cầu": "ecreq"}
     
     for i, chi_so in enumerate(chi_so_chon):
         ax = axes[i]
         key_du_lieu = map_key[chi_so]
-        truc_y = [du_lieu_tong_hop[ngay][key_du_lieu] for ngay in truc_x]
+        truc_y = [du_lieu_tong_hop[ngay][key_du_lieu] for ngay in truc_x_that]
         
-        # Vẽ cột
-        ax.bar(truc_x, truc_y, color='skyblue', edgecolor='black')
+        # Vẽ cột: Sử dụng nhãn "Ngày 1, Ngày 2..." thay vì ngày thật
+        ax.bar(nhan_truc_x, truc_y, color='skyblue', edgecolor='black')
         ax.set_ylabel(chi_so, fontsize=12)
         ax.grid(axis='y', linestyle='--', alpha=0.7)
         
         # Vẽ các đường ranh giới đỏ (Nhát cắt giai đoạn)
         if len(danh_sach_gd) > 1:
-            for gd in danh_sach_gd[:-1]: # Bỏ qua giai đoạn cuối cùng vì không cần cắt đuôi
+            for gd in danh_sach_gd[:-1]:
                 ngay_cuoi_gd = gd[-1]
-                ax.axvline(x=ngay_cuoi_gd, color='red', linestyle='--', linewidth=2)
+                # Dịch ngày cuối của giai đoạn thành chuỗi "Ngày X" tương ứng
+                vi_tri_cat = tu_dien_ngay[ngay_cuoi_gd] 
+                ax.axvline(x=vi_tri_cat, color='red', linestyle='--', linewidth=2)
                 
     # Xoay chữ ở trục X 45 độ cho đỡ bị đè lên nhau
     plt.xticks(rotation=45, ha='right')
