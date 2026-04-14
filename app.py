@@ -4,7 +4,7 @@
 import streamlit as st
 import numpy as np
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 import matplotlib.pyplot as plt
 
 # Hằng số luật chơi chung
@@ -31,19 +31,36 @@ def lay_gia_tri_so_thuc(dong_du_lieu, danh_sach_tu_khoa):
     return None
 
 def tong_hop_SBC_toan_dien(danh_sach_file_nho_giot, danh_sach_file_cham_phan, khu_vuc_duoc_chon):
-    """BƯỚC 1: Đọc cả 2 file và gộp chung thành một Sổ Cái duy nhất từ đầu đến cuối"""
+    """BƯỚC 1: Lập Sổ Cái - Phân công nhiệm vụ lấy dữ liệu rành mạch giữa 2 file"""
     du_lieu_ngay = {}
 
-    # --- ĐỌC FILE NHỎ GIỌT ---
+    # --- 1. ĐỌC FILE NHỎ GIỌT (Lấy Lần tưới, Phút tưới & TBEC) ---
     if danh_sach_file_nho_giot:
         dl_nho_giot = []
         for file in danh_sach_file_nho_giot:
             file.seek(0)
             dl_nho_giot.extend(json.load(file))
         
+        # Lọc theo khu vực và sắp xếp
         dl_nho_giot = [d for d in dl_nho_giot if str(d.get('STT')) == khu_vuc_duoc_chon]
         dl_nho_giot.sort(key=lambda x: x['Thời gian'])
 
+        # Quét lần 1: Nhặt số liệu TBEC của từng dòng
+        for dong in dl_nho_giot:
+            try:
+                thoi_diem = datetime.strptime(dong['Thời gian'], "%Y-%m-%d %H-%M-%S")
+                ngay_chuoi = thoi_diem.strftime("%Y-%m-%d")
+            except:
+                continue
+                
+            if ngay_chuoi not in du_lieu_ngay: 
+                du_lieu_ngay[ngay_chuoi] = {'so_lan_tuoi': 0, 'tong_giay': 0, 'ds_tbec': [], 'ds_ec_req': []}
+                
+            tbec = lay_gia_tri_so_thuc(dong, ['TBEC', 'tbec'])
+            if tbec is not None: 
+                du_lieu_ngay[ngay_chuoi]['ds_tbec'].append(tbec)
+
+        # Quét lần 2: Đếm số lần Bật/Tắt và thời gian tưới
         for i in range(len(dl_nho_giot) - 1):
             if dl_nho_giot[i].get('Trạng thái') == "Bật" and dl_nho_giot[i+1].get('Trạng thái') == "Tắt":
                 thoi_diem_bat_dau = datetime.strptime(dl_nho_giot[i]['Thời gian'], "%Y-%m-%d %H-%M-%S")
@@ -52,27 +69,33 @@ def tong_hop_SBC_toan_dien(danh_sach_file_nho_giot, danh_sach_file_cham_phan, kh
                 
                 if CAU_HINH_GOC["GIAY_TUOI_TOI_THIEU"] <= giay_tuoi <= CAU_HINH_GOC["GIAY_TUOI_TOI_DA"]:
                     ngay_chuoi = thoi_diem_bat_dau.strftime("%Y-%m-%d")
-                    if ngay_chuoi not in du_lieu_ngay: du_lieu_ngay[ngay_chuoi] = {'so_lan_tuoi': 0, 'tong_giay': 0, 'ds_tbec': [], 'ds_ec_req': []}
+                    if ngay_chuoi not in du_lieu_ngay: 
+                        du_lieu_ngay[ngay_chuoi] = {'so_lan_tuoi': 0, 'tong_giay': 0, 'ds_tbec': [], 'ds_ec_req': []}
                     du_lieu_ngay[ngay_chuoi]['so_lan_tuoi'] += 1
                     du_lieu_ngay[ngay_chuoi]['tong_giay'] += giay_tuoi
 
-    # --- ĐỌC FILE CHÂM PHÂN ---
+    # --- 2. ĐỌC FILE CHÂM PHÂN (CHỈ lấy EC Yêu cầu) ---
     if danh_sach_file_cham_phan:
         for file in danh_sach_file_cham_phan:
             file.seek(0)
             for dong in json.load(file):
                 if str(dong.get('STT')) != khu_vuc_duoc_chon: continue
-                thoi_diem = datetime.strptime(dong['Thời gian'], "%Y-%m-%d %H-%M-%S")
-                ngay_chuoi = thoi_diem.strftime("%Y-%m-%d")
                 
-                if ngay_chuoi not in du_lieu_ngay: du_lieu_ngay[ngay_chuoi] = {'so_lan_tuoi': 0, 'tong_giay': 0, 'ds_tbec': [], 'ds_ec_req': []}
+                try:
+                    thoi_diem = datetime.strptime(dong['Thời gian'], "%Y-%m-%d %H-%M-%S")
+                    ngay_chuoi = thoi_diem.strftime("%Y-%m-%d")
+                except:
+                    continue
                 
-                tbec = lay_gia_tri_so_thuc(dong, ['TBEC', 'tbec'])
+                if ngay_chuoi not in du_lieu_ngay: 
+                    du_lieu_ngay[ngay_chuoi] = {'so_lan_tuoi': 0, 'tong_giay': 0, 'ds_tbec': [], 'ds_ec_req': []}
+                
+                # Bỏ qua hoàn toàn TBEC ở đây, chỉ nhặt EC yêu cầu
                 ec_req = lay_gia_tri_so_thuc(dong, ['EC yêu cầu', 'ecreq'])
-                if tbec is not None: du_lieu_ngay[ngay_chuoi]['ds_tbec'].append(tbec)
-                if ec_req is not None: du_lieu_ngay[ngay_chuoi]['ds_ec_req'].append(ec_req)
+                if ec_req is not None: 
+                    du_lieu_ngay[ngay_chuoi]['ds_ec_req'].append(ec_req)
 
-    # --- TÍNH TRUNG BÌNH & HOÀN THIỆN SỔ CÁI ---
+    # --- 3. TÍNH TRUNG BÌNH & HOÀN THIỆN SỔ CÁI ---
     so_cai_chinh_thuc = {}
     for ngay, dl in du_lieu_ngay.items():
         so_cai_chinh_thuc[ngay] = {
@@ -87,7 +110,6 @@ def tim_kiem_cac_mua_vu(so_cai, chi_so_goc, nguong_bat_dau):
     """BƯỚC 2: Cỗ Máy Master - Cắt Vụ Mùa (Logic Vượt Ngưỡng)"""
     danh_sach_ngay_hop_le = []
     
-    # Lọc những ngày thỏa mãn điều kiện Vượt Ngưỡng
     for chuoi_ngay, du_lieu in so_cai.items():
         if du_lieu[chi_so_goc] >= nguong_bat_dau:
             ngay_dinh_dang = datetime.strptime(chuoi_ngay, "%Y-%m-%d").date()
@@ -96,7 +118,6 @@ def tim_kiem_cac_mua_vu(so_cai, chi_so_goc, nguong_bat_dau):
     danh_sach_ngay_hop_le.sort()
     danh_sach_mua_vu = []
     
-    # Chặt vụ nếu rớt ngưỡng quá số ngày cho phép
     if danh_sach_ngay_hop_le:
         ngay_bat_dau_vu = danh_sach_ngay_hop_le[0]
         for i in range(1, len(danh_sach_ngay_hop_le)):
@@ -110,7 +131,6 @@ def tim_kiem_cac_mua_vu(so_cai, chi_so_goc, nguong_bat_dau):
                     danh_sach_mua_vu.append((ngay_bat_dau_vu, ngay_lien_truoc))
                 ngay_bat_dau_vu = ngay_dang_xet 
                 
-        # Vét nốt vụ cuối
         ngay_cuoi_cung = danh_sach_ngay_hop_le[-1]
         if (ngay_cuoi_cung - ngay_bat_dau_vu).days + 1 >= CAU_HINH_GOC["SO_NGAY_TOI_THIEU_MOT_VU"]:
             danh_sach_mua_vu.append((ngay_bat_dau_vu, ngay_cuoi_cung))
@@ -126,15 +146,14 @@ def chia_nho_thanh_cac_giai_doan(danh_sach_ngay_trong_vu, so_cai, chi_so_goc, sa
     
     for i in range(1, len(danh_sach_ngay_trong_vu)):
         ngay_dang_xet = danh_sach_ngay_trong_vu[i]
-        ngay_moc = giai_doan_hien_tai[0] # Lấy ngày mở đầu giai đoạn làm mốc nền
+        ngay_moc = giai_doan_hien_tai[0] 
         
         gia_tri_hom_nay = so_cai[ngay_dang_xet].get(chi_so_goc, 0)
         gia_tri_moc = so_cai[ngay_moc].get(chi_so_goc, 0)
         
-        # Logic Nhảy Bậc Thang
         if abs(gia_tri_hom_nay - gia_tri_moc) >= sai_so_giai_doan:
             tat_ca_giai_doan.append(giai_doan_hien_tai)
-            giai_doan_hien_tai = [ngay_dang_xet] # Chém nhát cắt, mở giai đoạn mới
+            giai_doan_hien_tai = [ngay_dang_xet] 
         else:
             giai_doan_hien_tai.append(ngay_dang_xet)
             
@@ -142,7 +161,7 @@ def chia_nho_thanh_cac_giai_doan(danh_sach_ngay_trong_vu, so_cai, chi_so_goc, sa
     return tat_ca_giai_doan
 
 # =====================================================================
-# PHẦN 3: LÕI VẼ BIỂU ĐỒ (Giữ nguyên logic vẽ, chỉ làm đẹp trục)
+# PHẦN 3: LÕI VẼ BIỂU ĐỒ
 # =====================================================================
 
 def ve_bieu_do_dong_thoi(du_lieu_tong_hop, tat_ca_giai_doan):
@@ -161,7 +180,6 @@ def ve_bieu_do_dong_thoi(du_lieu_tong_hop, tat_ca_giai_doan):
         truc.set_ylabel(ten_hien_thi, fontsize=12)
         truc.grid(axis='y', linestyle='--', alpha=0.7)
         
-        # Vẽ vạch đỏ cắt giai đoạn
         if len(tat_ca_giai_doan) > 1:
             for gd in tat_ca_giai_doan[:-1]:
                 vi_tri_cat = danh_sach_ngay_thuc_te.index(gd[-1]) 
@@ -169,7 +187,7 @@ def ve_bieu_do_dong_thoi(du_lieu_tong_hop, tat_ca_giai_doan):
 
     buoc_nhay_nhan = max(1, len(danh_sach_ngay_thuc_te) // 30) 
     ds_vitri_nhan = truc_x_so_dem[::buoc_nhay_nhan]
-    ds_nhan_ngay = [danh_sach_ngay_thuc_te[i][-5:] for i in ds_vitri_nhan] # Chỉ hiện MM-DD cho gọn
+    ds_nhan_ngay = [danh_sach_ngay_thuc_te[i][-5:] for i in ds_vitri_nhan]
     
     plt.xticks(ds_vitri_nhan, ds_nhan_ngay, rotation=45, ha='right', fontsize=10)
     khung_tranh.subplots_adjust(hspace=0.3) 
@@ -197,7 +215,6 @@ def main():
         chi_so_hien_thi = st.selectbox("🎯 Chọn Chỉ số Master", list(tu_dien_chi_so.keys()))
         chi_so_goc = tu_dien_chi_so[chi_so_hien_thi]
         
-        # Mặc định gợi ý số liệu hợp lý dựa trên chỉ số
         if chi_so_goc == "so_lan_tuoi":
             gia_tri_nguong_md, gia_tri_sai_so_md = 5.0, 2.0
         else:
@@ -227,7 +244,6 @@ def main():
         vi_tri_vu = st.selectbox("🌾 3. Chọn Mùa Vụ Để Phân Tích", range(len(ds_mua_vu)), format_func=lambda x: ds_ten_vu[x])
         vu_chon = ds_mua_vu[vi_tri_vu]
         
-        # Lọc Sổ Cái theo ngày thuộc vụ
         ngay_trong_vu = sorted([ngay for ngay in so_cai.keys() if vu_chon[0] <= datetime.strptime(ngay, "%Y-%m-%d").date() <= vu_chon[1]])
         
         # BƯỚC 3: Cắt Giai Đoạn
