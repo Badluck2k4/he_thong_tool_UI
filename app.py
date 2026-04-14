@@ -217,7 +217,7 @@ def ve_bieu_do_dong_thoi(du_lieu_tong_hop, danh_sach_gd, chi_so_chon):
                 
     # Xoay chữ ở trục X 45 độ cho đỡ bị đè lên nhau
     plt.xticks(rotation=0, ha='center')
-    fig.tight_layout()
+    fig.tight_layout(h_pad=2.0)
     return fig
 
 
