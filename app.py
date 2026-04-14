@@ -1,14 +1,13 @@
 # =====================================================================
 # PHẦN 1: CẤU HÌNH & KHỞI TẠO (PHÒNG QUẢN LÝ)
 # =====================================================================
-"""
-Vai trò cốt lõi: Nơi thiết lập luật chơi và chuẩn bị công cụ trước khi nhà hàng mở cửa.
-Nhiệm vụ: 
-- Khai báo các thư viện (đưa công cụ vào).
-- Định nghĩa GIATRI_GOC chứa các hằng số không thay đổi.
-- Khởi tạo bộ nhớ tạm (st.session_state) để lưu dữ liệu UI.
-Nguyên tắc: TUYỆT ĐỐI KHÔNG viết hàm tính toán hay lệnh in giao diện (st.write) ở đây.
-"""
+# Vai trò cốt lõi: Nơi thiết lập luật chơi và chuẩn bị công cụ trước khi nhà hàng mở cửa.
+# Nhiệm vụ: 
+# - Khai báo các thư viện (đưa công cụ vào).
+# - Định nghĩa GIATRI_GOC chứa các hằng số không thay đổi.
+# - Khởi tạo bộ nhớ tạm (st.session_state) để lưu dữ liệu UI.
+# Nguyên tắc: TUYỆT ĐỐI KHÔNG viết hàm tính toán hay lệnh in giao diện (st.write) ở đây.
+
 import streamlit as st
 import numpy as np
 import json
@@ -33,17 +32,15 @@ if 'ss_req_key' not in st.session_state: st.session_state.ss_req_key = 0.5
 # =====================================================================
 # PHẦN 2: LÕI XỬ LÝ DỮ LIỆU (NHÀ BẾP - LÕI THUẬT TOÁN)
 # =====================================================================
-"""
-Vai trò cốt lõi: "Bộ não" của hệ thống. Nơi các thuật toán phức tạp nhất hoạt động.
-Nhiệm vụ:
-- Xử lý file, làm sạch dữ liệu rác.
-- Chạy thuật toán Cắt Mùa Vụ và Cắt Giai Đoạn.
-Nguyên tắc: CẤM VẬN GIAO DIỆN. Các hàm ở đây chỉ nhận nguyên liệu (tham số), 
-tính toán và trả ra (return) dữ liệu sạch. Không dùng lệnh in ra màn hình ở đây.
-"""
+# Vai trò cốt lõi: "Bộ脑" của hệ thống. Nơi các thuật toán phức tạp nhất hoạt động.
+# Nhiệm vụ:
+# - Xử lý file, làm sạch dữ liệu rác.
+# - Chạy thuật toán Cắt Mùa Vụ và Cắt Giai Đoạn.
+# Nguyên tắc: CẤM VẬN GIAO DIỆN. Các hàm ở đây chỉ nhận nguyên liệu (tham số), 
+# tính toán và trả ra (return) dữ liệu sạch. Không dùng lệnh in ra màn hình ở đây.
 
 def chuyen_doi_so_thuc(du_lieu, danh_sach_khoa):
-    """Làm sạch dữ liệu: Đổi dấu phẩy thành dấu chấm và ép kiểu số thực"""
+    # Làm sạch dữ liệu: Đổi dấu phẩy thành dấu chấm và ép kiểu số thực
     for khoa in danh_sach_khoa:
         gia_tri = du_lieu.get(khoa)
         if gia_tri is not None:
@@ -54,7 +51,7 @@ def chuyen_doi_so_thuc(du_lieu, danh_sach_khoa):
     return None
 
 def xu_ly_file_nho_giot(tep_nho_giot, khu_vuc):
-    """Lọc dữ liệu nhỏ giọt theo khu vực, sắp xếp thời gian và tìm số lần/số phút tưới"""
+    # Lọc dữ liệu nhỏ giọt theo khu vực, sắp xếp thời gian và tìm số lần/số phút tưới
     du_lieu_tho = []
     for tep in tep_nho_giot:
         tep.seek(0)
@@ -83,7 +80,7 @@ def xu_ly_file_nho_giot(tep_nho_giot, khu_vuc):
     return thong_ke_ngay, thoi_gian_ngay
 
 def tim_kiem_mua_vu(thong_ke_ngay):
-    """Tìm các khoảng đứt gãy (ngày nghỉ) để chặt dữ liệu thành từng Mùa Vụ riêng biệt"""
+    # Tìm các khoảng đứt gãy (ngày nghỉ) để chặt dữ liệu thành từng Mùa Vụ riêng biệt
     # Lọc bỏ những ngày tưới lắt nhắt (dưới LAN_MIN_NGAY)
     ngay_ok = sorted([datetime.strptime(n, "%Y-%m-%d").date() 
                       for n, c in thong_ke_ngay.items() if c >= GIATRI_GOC["LAN_MIN_NGAY"]])
@@ -103,7 +100,7 @@ def tim_kiem_mua_vu(thong_ke_ngay):
     return danh_sach_vu
 
 def tong_hop_du_lieu_ngay(tep_cham_phan, khu_vuc, v_hien_tai, thong_ke_ngay, thoi_gian_ngay):
-    """Ghép dữ liệu Châm Phân vào Nhỏ Giọt, tạo thành Sổ Cái tổng hợp cho từng ngày"""
+    # Ghép dữ liệu Châm Phân vào Nhỏ Giọt, tạo thành Sổ Cái tổng hợp cho từng ngày
     data_cp_ngay = {}
     for tep in tep_cham_phan:
         tep.seek(0)
@@ -140,7 +137,7 @@ def tong_hop_du_lieu_ngay(tep_cham_phan, khu_vuc, v_hien_tai, thong_ke_ngay, tho
     return du_lieu_tong_hop, ngay_vu
 
 def chia_giai_doan_bien_thien_dong_thoi(danh_sach_ngay, du_lieu_tong_hop, cau_hinh_nguong):
-    """Dùng sai số biến thiên để chia nhỏ Mùa Vụ thành các Giai Đoạn sinh trưởng"""
+    # Dùng sai số biến thiên để chia nhỏ Mùa Vụ thành các Giai Đoạn sinh trưởng
     if not cau_hinh_nguong or not danh_sach_ngay: return [danh_sach_ngay]
     
     danh_sach_cac_gd = []
@@ -175,12 +172,10 @@ def chia_giai_doan_bien_thien_dong_thoi(danh_sach_ngay, du_lieu_tong_hop, cau_hi
 # =====================================================================
 # PHẦN 3: LÕI VẼ BIỂU ĐỒ (TRẠM TRANG TRÍ MÓN ĂN)
 # =====================================================================
-"""
-Vai trò cốt lõi: Chuyên gia hội họa. Biến con số thành hình ảnh trực quan.
-Nhiệm vụ: Nhận dữ liệu "đã chín", dùng matplotlib để vẽ đồ thị, kẻ vạch phân cách.
-Nguyên tắc: Họa sĩ chỉ vẽ theo đúng dữ liệu được giao, KHÔNG tự ý tính toán 
-hay sửa đổi số liệu ở đây.
-"""
+# Vai trò cốt lõi: Chuyên gia hội họa. Biến con số thành hình ảnh trực quan.
+# Nhiệm vụ: Nhận dữ liệu "đã chín", dùng matplotlib để vẽ đồ thị, kẻ vạch phân cách.
+# Nguyên tắc: Họa sĩ chỉ vẽ theo đúng dữ liệu được giao, KHÔNG tự ý tính toán 
+# hay sửa đổi số liệu ở đây.
 
 def ve_bieu_do_dong_thoi(du_lieu_tong_hop, danh_sach_gd, chi_so_chon):
     # Khởi tạo khung tranh (nếu người dùng chưa chọn gì thì báo lỗi nhẹ nhàng)
@@ -226,13 +221,11 @@ def ve_bieu_do_dong_thoi(du_lieu_tong_hop, danh_sach_gd, chi_so_chon):
 # =====================================================================
 # PHẦN 4: GIAO DIỆN NGƯỜI DÙNG (SÂN KHẤU VÀ BỒI BÀN)
 # =====================================================================
-"""
-Vai trò cốt lõi: Nơi giao tiếp với người dùng và điều phối kịch bản chính.
-Nhiệm vụ: 
-- Vẽ giao diện (Sidebar, Button, Text...).
-- Lấy input từ người dùng -> Truyền cho Phần 2 (Bếp) -> Truyền cho Phần 3 (Họa sĩ).
-- Hiển thị kết quả ra màn hình.
-"""
+# Vai trò cốt lõi: Nơi giao tiếp với người dùng và điều phối kịch bản chính.
+# Nhiệm vụ: 
+# - Vẽ giao diện (Sidebar, Button, Text...).
+# - Lấy input từ người dùng -> Truyền cho Phần 2 (Bếp) -> Truyền cho Phần 3 (Họa sĩ).
+# - Hiển thị kết quả ra màn hình.
 
 def main():
     st.set_page_config(page_title="Phân Tích Dữ Liệu", layout="wide")
