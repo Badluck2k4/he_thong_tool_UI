@@ -191,7 +191,7 @@ def ve_bieu_do_dong_thoi(du_lieu_tong_hop, danh_sach_gd, chi_so_chon):
     for gd in danh_sach_gd: truc_x_that.extend(gd)
         
     # --- ĐOẠN THAY ĐỔI: Dịch ngày thật sang "Ngày 1, Ngày 2..." ---
-    nhan_truc_x = [f"Ngày {i+1}" for i in range(len(truc_x_that))]
+    nhan_truc_x = [f"{i+1}" for i in range(len(truc_x_that))]
     tu_dien_ngay = dict(zip(truc_x_that, nhan_truc_x)) # Tạo ánh xạ để lát nữa vẽ vạch đỏ cho đúng
     # ----------------------------------------------------------------
     
