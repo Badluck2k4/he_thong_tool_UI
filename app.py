@@ -1,5 +1,6 @@
 import streamlit as st
 import numpy as np
+import pandas as pd
 import json
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
@@ -147,11 +148,9 @@ def ve_bieu_do_chi_so_duoc_chon(du_lieu_tong_hop, danh_sach_cac_giai_doan, ten_c
     
     for i, gd in enumerate(danh_sach_cac_giai_doan):
         mau = bang_mau[i % len(bang_mau)]
-        
-        # LOGIC TÔ SÁNG/LÀM MỜ (HIGHLIGHT)
-        do_trong_suot = 1.0 # Mặc định sáng 100%
+        do_trong_suot = 1.0 
         if vi_tri_gd_highlight is not None and vi_tri_gd_highlight != i:
-            do_trong_suot = 0.2 # Nếu không được chọn thì mờ đi chỉ còn 20%
+            do_trong_suot = 0.2 
             
         du_lieu_y = []
         for n in gd:
@@ -177,12 +176,11 @@ def ve_bieu_do_chi_so_duoc_chon(du_lieu_tong_hop, danh_sach_cac_giai_doan, ten_c
 # =====================================================================
 
 def main():
-    st.set_page_config(page_title="TOOL UI HỆ THỐNG TỰ ĐỘNG NÔNG NGHIỆP V1.5", layout="wide")
-    st.title("📊 TOOL UI HỆ THỐNG TỰ ĐỘNG NÔNG NGHIỆP V1.5")
+    st.set_page_config(page_title="TOOL UI HỆ THỐNG TỰ ĐỘNG NÔNG NGHIỆP V1.6", layout="wide")
+    st.title("📊 TOOL UI HỆ THỐNG TỰ ĐỘNG NÔNG NGHIỆP V1.6")
     
     with st.sidebar:
         st.header("📂 1. Tải lên & Phân loại dữ liệu")
-        # 1 Uploader duy nhất cho tất cả file
         tat_ca_tep = st.file_uploader("Kéo thả TẤT CẢ các tệp JSON vào đây", accept_multiple_files=True, type=['json'])
         
         tep_nho_giot = []
@@ -193,10 +191,8 @@ def main():
             st.markdown("**Phân bổ tệp dữ liệu vừa tải lên:**")
             st.caption("Tick chọn file tương ứng với mỗi luồng dữ liệu (có thể chọn nhiều file).")
             
-            # Lấy danh sách tên file
             danh_sach_ten = [f.name for f in tat_ca_tep]
             
-            # Form chọn file
             chon_tep_nho_giot = st.multiselect(
                 "💧 Dữ liệu Nhỏ Giọt (Lần tưới, TBEC):", 
                 options=danh_sach_ten
@@ -207,7 +203,6 @@ def main():
                 options=danh_sach_ten
             )
             
-            # Ánh xạ từ tên file đã chọn về lại object file gốc
             tep_nho_giot = [f for f in tat_ca_tep if f.name in chon_tep_nho_giot]
             tep_cham_phan = [f for f in tat_ca_tep if f.name in chon_tep_cham_phan]
             
@@ -224,7 +219,6 @@ def main():
         nguong = st.number_input(f"📈 Ngưỡng bắt đầu", value=def_n)
         sai_so = st.number_input(f"✂️ Sai số cắt GĐ", value=def_s)
 
-    # Hệ thống chỉ chạy nếu đã tick chọn ít nhất 1 tệp nhỏ giọt hoặc châm phân
     if tep_nho_giot or tep_cham_phan:
         so_cai = tao_so_cai_du_lieu_tong_hop(tep_nho_giot, tep_cham_phan, khu_vuc)
         if not so_cai: st.error("Không có dữ liệu hợp lệ trong các tệp đã chọn!"); return
@@ -232,8 +226,72 @@ def main():
         mua_vu = tim_kiem_cac_mua_vu(so_cai, bien_goc, nguong)
         if not mua_vu: st.warning("Không tìm thấy vụ mùa nào thỏa mãn ngưỡng!"); return
 
+        # CHỌN MÙA VỤ ĐỂ PHÂN TÍCH SÂU (Chuyển lên trên cùng)
+        st.markdown("---")
+        ten_vu = [f"Vụ {i+1}: {v[0].strftime('%d/%m')} - {v[1].strftime('%d/%m')}" for i, v in enumerate(mua_vu)]
+        vi_tri_vu = st.selectbox("🌾 3. Chọn Mùa Vụ Để Vẽ Biểu Đồ & Phân Tích Sâu", range(len(mua_vu)), format_func=lambda x: ten_vu[x])
+        
+        vu_chot = mua_vu[vi_tri_vu]
+        cac_ngay_vu = sorted([n for n in so_cai.keys() if vu_chot[0] <= datetime.strptime(n, "%Y-%m-%d").date() <= vu_chot[1]])
+        gd_list = chia_nho_mua_vu_thanh_cac_giai_doan(cac_ngay_vu, so_cai, bien_goc, sai_so)
+        
+        # THẺ CHỈ SỐ NHANH
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Tổng thời gian vụ", f"{len(cac_ngay_vu)} ngày")
+        m2.metric("Số giai đoạn", f"{len(gd_list)} GĐ")
+        tb_tbec = np.mean([so_cai[n]['tbec'] for n in cac_ngay_vu])
+        m3.metric("TBEC Trung bình", f"{tb_tbec:.2f}")
+        tb_tuoi = np.mean([so_cai[n]['so_lan_tuoi'] for n in cac_ngay_vu])
+        m4.metric("Tần suất tưới TB", f"{int(tb_tuoi)} lần/ngày")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # BỘ LỌC HIGHLIGHT GIAI ĐOẠN
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.success(f"✅ Đã phân tích được **{len(gd_list)} giai đoạn** cho {ten_vu[vi_tri_vu]}.")
+        with col2:
+            danh_sach_chon_gd = ["Tất cả"] + [f"Giai đoạn {i+1}" for i in range(len(gd_list))]
+            gd_duoc_chon = st.selectbox("🔦 Làm nổi bật Giai đoạn:", danh_sach_chon_gd)
+            
+        vi_tri_gd_highlight = None
+        if gd_duoc_chon != "Tất cả":
+            vi_tri_gd_highlight = danh_sach_chon_gd.index(gd_duoc_chon) - 1
+
+        # VẼ BIỂU ĐỒ 
+        fig = ve_bieu_do_chi_so_duoc_chon(so_cai, gd_list, ten_hien_thi, bien_goc, vi_tri_gd_highlight)
+        st.pyplot(fig, use_container_width=True)
+        
+        # BẢNG DỮ LIỆU ĐƯỢC TÔ SÁNG CỘT CHỈ SỐ ĐANG LÀM MỐC
+        st.markdown("### 📋 Bảng Số Liệu Chi Tiết")
+        bang_data = []
+        for i, gd in enumerate(gd_list):
+            if vi_tri_gd_highlight is not None and vi_tri_gd_highlight != i:
+                continue 
+                
+            for n in gd:
+                row = {"Giai đoạn": f"GĐ {i+1}", "Ngày": n}
+                row.update({k.upper(): v for k, v in so_cai[n].items()})
+                bang_data.append(row)
+                
+        if bang_data:
+            df_bang = pd.DataFrame(bang_data)
+            cot_can_to_dam = bien_goc.upper()
+            
+            # Hàm áp dụng CSS cho Pandas Styler
+            def to_mau_cot_chon(s):
+                if s.name == cot_can_to_dam:
+                    return ['background-color: rgba(255, 204, 0, 0.3); font-weight: bold'] * len(s)
+                return [''] * len(s)
+                
+            # Render bảng đã được styling
+            bang_da_style = df_bang.style.apply(to_mau_cot_chon)
+            st.dataframe(bang_da_style, use_container_width=True)
+        else:
+            st.info("Không có dữ liệu để hiển thị bảng.")
+
         # =================================================================
-        # XÂY DỰNG TỪ ĐIỂN TRA CỨU TOÀN CỤC CHO MỌI VỤ
+        # KÍNH LÚP TRA CỨU TOÀN CỤC ĐƯỢC CHUYỂN XUỐNG ĐÂY
         # =================================================================
         tu_dien_tra_cuu_toan_cuc = {}
         for vi_tri_vu_tc, vu_tc in enumerate(mua_vu):
@@ -250,7 +308,6 @@ def main():
                         "Giai Đoạn": f"Giai đoạn {vi_tri_gd_tc + 1}"
                     }
 
-        # TÍNH NĂNG 1: TRA CỨU BẰNG KÍNH LÚP 
         st.markdown("---")
         st.subheader("🔍 Kính Lúp Tra Cứu Toàn Cục")
         st.caption("Chọn một khoảng thời gian bất kỳ để xem nhanh cây đang ở Vụ nào, ngày thứ mấy, giai đoạn nào mà không làm ảnh hưởng đến biểu đồ tổng.")
@@ -289,55 +346,6 @@ def main():
                 else:
                     st.info("💡 Nông trại đang nghỉ ngơi, không có dữ liệu mùa vụ nào trong khoảng thời gian này.")
 
-        # CHỌN MÙA VỤ ĐỂ PHÂN TÍCH SÂU
-        st.markdown("---")
-        ten_vu = [f"Vụ {i+1}: {v[0].strftime('%d/%m')} - {v[1].strftime('%d/%m')}" for i, v in enumerate(mua_vu)]
-        vi_tri_vu = st.selectbox("🌾 3. Chọn Mùa Vụ Để Vẽ Biểu Đồ & Phân Tích Sâu", range(len(mua_vu)), format_func=lambda x: ten_vu[x])
-        
-        vu_chot = mua_vu[vi_tri_vu]
-        cac_ngay_vu = sorted([n for n in so_cai.keys() if vu_chot[0] <= datetime.strptime(n, "%Y-%m-%d").date() <= vu_chot[1]])
-        gd_list = chia_nho_mua_vu_thanh_cac_giai_doan(cac_ngay_vu, so_cai, bien_goc, sai_so)
-        
-        # THẺ CHỈ SỐ NHANH
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Tổng thời gian vụ", f"{len(cac_ngay_vu)} ngày")
-        m2.metric("Số giai đoạn", f"{len(gd_list)} GĐ")
-        tb_tbec = np.mean([so_cai[n]['tbec'] for n in cac_ngay_vu])
-        m3.metric("TBEC Trung bình", f"{tb_tbec:.2f}")
-        tb_tuoi = np.mean([so_cai[n]['so_lan_tuoi'] for n in cac_ngay_vu])
-        m4.metric("Tần suất tưới TB", f"{int(tb_tuoi)} lần/ngày")
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        # TÍNH NĂNG 2: BỘ LỌC HIGHLIGHT GIAI ĐOẠN
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            st.success(f"✅ Đã phân tích được **{len(gd_list)} giai đoạn** cho {ten_vu[vi_tri_vu]}.")
-        with col2:
-            danh_sach_chon_gd = ["Tất cả"] + [f"Giai đoạn {i+1}" for i in range(len(gd_list))]
-            gd_duoc_chon = st.selectbox("🔦 Làm nổi bật Giai đoạn:", danh_sach_chon_gd)
-            
-        vi_tri_gd_highlight = None
-        if gd_duoc_chon != "Tất cả":
-            vi_tri_gd_highlight = danh_sach_chon_gd.index(gd_duoc_chon) - 1
-
-        # VẼ BIỂU ĐỒ CÓ TRUYỀN BIẾN HIGHLIGHT (Bung to full màn hình)
-        fig = ve_bieu_do_chi_so_duoc_chon(so_cai, gd_list, ten_hien_thi, bien_goc, vi_tri_gd_highlight)
-        st.pyplot(fig, use_container_width=True)
-        
-        # BẢNG DỮ LIỆU CŨNG ĐƯỢC LỌC THEO BỘ CHỌN
-        st.markdown("### 📋 Bảng Số Liệu Chi Tiết")
-        bang_data = []
-        for i, gd in enumerate(gd_list):
-            if vi_tri_gd_highlight is not None and vi_tri_gd_highlight != i:
-                continue 
-                
-            for n in gd:
-                row = {"Giai đoạn": f"GĐ {i+1}", "Ngày": n}
-                row.update({k.upper(): v for k, v in so_cai[n].items()})
-                bang_data.append(row)
-        st.dataframe(bang_data, use_container_width=True)
-        
     else:
         st.info("👈 Vui lòng tải lên và chọn tệp JSON để bắt đầu.")
 
