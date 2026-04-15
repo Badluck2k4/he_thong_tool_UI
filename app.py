@@ -191,7 +191,7 @@ def main():
         bien_goc = tu_dien[ten_hien_thi]
         
         # Thiết lập mặc định
-        def_n, def_s = (8.1, 5.0) if bien_goc == "so_lan_tuoi" else (0.38, 0.14) if bien_goc == "tbec" else (0.90, 0.16)
+        def_n, def_s = (6, 3.0) if bien_goc == "so_lan_tuoi" else (0.40, 0.15) if bien_goc == "tbec" else (0.90, 0.2)
         nguong = st.number_input(f"📈 Ngưỡng bắt đầu", value=def_n)
         sai_so = st.number_input(f"✂️ Sai số cắt GĐ", value=def_s)
 
