@@ -227,8 +227,7 @@ def main():
     st.markdown("---")
     st.markdown(
         "<div style='text-align: center; color: #888888; padding: 20px; font-weight: bold; font-style: italic;'>"
-        \n"CODED BY QUANG SKIBIDI DOPYEYE-GEMINI 👽, PLS DONATED ME"
-        "YOU CAN DONATE TO XXXXXXXXXXX"
+        \n"CODED BY QUANG SKIBIDI DOPYEYE-GEMINI 👽, PLS DONATED ME<br>YOU CAN DONATE TO XXXXXXXXXXX"
         "</div>", 
         unsafe_allow_html=True
     )
