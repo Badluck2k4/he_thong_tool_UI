@@ -134,7 +134,7 @@ def chia_nho_mua_vu_thanh_cac_giai_doan(danh_sach_ngay_trong_vu, so_cai_du_lieu,
     return danh_sach_cac_giai_doan
 
 # =====================================================================
-# PHẦN 3: HÀM VẼ BIỂU ĐỒ (Giữ nguyên gốc để biểu đồ to rõ ràng)
+# PHẦN 3: HÀM VẼ BIỂU ĐỒ 
 # =====================================================================
 
 def ve_bieu_do_chi_so_duoc_chon(du_lieu_tong_hop, danh_sach_cac_giai_doan, ten_chi_so_hien_thi, ten_bien_trong_so_cai, vi_tri_gd_highlight=None):
@@ -181,9 +181,37 @@ def main():
     st.title("📊 TOOL UI HỆ THỐNG TỰ ĐỘNG NÔNG NGHIỆP V1.5")
     
     with st.sidebar:
-        st.header("📂 1. Cấu hình dữ liệu")
-        tep_nho_giot = st.file_uploader("Tệp Nhỏ giọt (JSON)", accept_multiple_files=True)
-        tep_cham_phan = st.file_uploader("Tệp Châm phân (JSON)", accept_multiple_files=True)
+        st.header("📂 1. Tải lên & Phân loại dữ liệu")
+        # 1 Uploader duy nhất cho tất cả file
+        tat_ca_tep = st.file_uploader("Kéo thả TẤT CẢ các tệp JSON vào đây", accept_multiple_files=True, type=['json'])
+        
+        tep_nho_giot = []
+        tep_cham_phan = []
+        
+        if tat_ca_tep:
+            st.markdown("---")
+            st.markdown("**Phân bổ tệp dữ liệu vừa tải lên:**")
+            st.caption("Tick chọn file tương ứng với mỗi luồng dữ liệu (có thể chọn nhiều file).")
+            
+            # Lấy danh sách tên file
+            danh_sach_ten = [f.name for f in tat_ca_tep]
+            
+            # Form chọn file
+            chon_tep_nho_giot = st.multiselect(
+                "💧 Dữ liệu Nhỏ Giọt (Lần tưới, TBEC):", 
+                options=danh_sach_ten
+            )
+            
+            chon_tep_cham_phan = st.multiselect(
+                "🧪 Dữ liệu Châm Phân (EC Yêu cầu):", 
+                options=danh_sach_ten
+            )
+            
+            # Ánh xạ từ tên file đã chọn về lại object file gốc
+            tep_nho_giot = [f for f in tat_ca_tep if f.name in chon_tep_nho_giot]
+            tep_cham_phan = [f for f in tat_ca_tep if f.name in chon_tep_cham_phan]
+            
+        st.markdown("---")
         khu_vuc = st.selectbox("Khu vực", ["1", "2", "3", "4"])
         
         st.markdown("---")
@@ -196,9 +224,10 @@ def main():
         nguong = st.number_input(f"📈 Ngưỡng bắt đầu", value=def_n)
         sai_so = st.number_input(f"✂️ Sai số cắt GĐ", value=def_s)
 
-    if tep_nho_giot and tep_cham_phan:
+    # Hệ thống chỉ chạy nếu đã tick chọn ít nhất 1 tệp nhỏ giọt hoặc châm phân
+    if tep_nho_giot or tep_cham_phan:
         so_cai = tao_so_cai_du_lieu_tong_hop(tep_nho_giot, tep_cham_phan, khu_vuc)
-        if not so_cai: st.error("Không có dữ liệu!"); return
+        if not so_cai: st.error("Không có dữ liệu hợp lệ trong các tệp đã chọn!"); return
             
         mua_vu = tim_kiem_cac_mua_vu(so_cai, bien_goc, nguong)
         if not mua_vu: st.warning("Không tìm thấy vụ mùa nào thỏa mãn ngưỡng!"); return
@@ -310,7 +339,7 @@ def main():
         st.dataframe(bang_data, use_container_width=True)
         
     else:
-        st.info("👈 Vui lòng tải lên tệp JSON để bắt đầu.")
+        st.info("👈 Vui lòng tải lên và chọn tệp JSON để bắt đầu.")
 
     # --- CHỮ KÝ FOOTER ---
     st.markdown("---")
