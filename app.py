@@ -209,7 +209,7 @@ def main():
         tu_dien_cot_bang = {"Lần tưới": "LẦN TƯỚI", "TBEC": "TBEC", "EC Yêu cầu": "EC YÊU CẦU"}
         ten_cot_highlight = tu_dien_cot_bang[ten_hien_thi]
         
-        def_n, def_s = (8.1, 5.0) if bien_goc == "so_lan_tuoi" else (0.38, 0.14) if bien_goc == "tbec" else (0.90, 0.16)
+        def_n, def_s = (6.0, 4.0) if bien_goc == "so_lan_tuoi" else (0.3, 0.15) if bien_goc == "tbec" else (0.90, 0.14)
         nguong = st.number_input(f"📈 Ngưỡng bắt đầu", value=def_n)
         sai_so = st.number_input(f"✂️ Sai số cắt GĐ", value=def_s)
 
