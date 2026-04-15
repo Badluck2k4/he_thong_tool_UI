@@ -278,7 +278,7 @@ def main():
             # Hàm tô màu cột được chọn
             def to_mau_cot(s):
                 if s.name == ten_cot_highlight:
-                    return ['background-color: rgba(255, 204, 0, 0.3); font-weight: bold; color: #d35400'] * len(s)
+                    return ['background-color: rgba(255, 204, 0, 0.3); font-weight: bold; color: #000000'] * len(s)
                 return [''] * len(s)
             
             st.dataframe(df.style.apply(to_mau_cot), use_container_width=True)
