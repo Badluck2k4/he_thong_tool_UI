@@ -1,6 +1,7 @@
 import streamlit as st
 import numpy as np
 import json
+import pandas as pd  # Đã thêm lại pandas để xử lý giao diện bảng
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 
@@ -189,19 +190,9 @@ def main():
             st.markdown("---")
             st.markdown("**Phân bổ tệp dữ liệu vừa tải lên:**")
             st.caption("Tick chọn file tương ứng với mỗi luồng dữ liệu (có thể chọn nhiều file).")
-            
             danh_sach_ten = [f.name for f in tat_ca_tep]
-            
-            chon_tep_nho_giot = st.multiselect(
-                "💧 Dữ liệu Nhỏ Giọt (Lần tưới, TBEC):", 
-                options=danh_sach_ten
-            )
-            
-            chon_tep_cham_phan = st.multiselect(
-                "🧪 Dữ liệu Châm Phân (EC Yêu cầu):", 
-                options=danh_sach_ten
-            )
-            
+            chon_tep_nho_giot = st.multiselect("💧 Dữ liệu Nhỏ Giọt (Lần tưới, TBEC):", options=danh_sach_ten)
+            chon_tep_cham_phan = st.multiselect("🧪 Dữ liệu Châm Phân (EC Yêu cầu):", options=danh_sach_ten)
             tep_nho_giot = [f for f in tat_ca_tep if f.name in chon_tep_nho_giot]
             tep_cham_phan = [f for f in tat_ca_tep if f.name in chon_tep_cham_phan]
             
@@ -214,6 +205,10 @@ def main():
         ten_hien_thi = st.selectbox("🎯 Chỉ số làm mốc", list(tu_dien.keys()))
         bien_goc = tu_dien[ten_hien_thi]
         
+        # Tên cột trong bảng tương ứng để highlight
+        tu_dien_cot_bang = {"Lần tưới": "LẦN TƯỚI", "TBEC": "TBEC", "EC Yêu cầu": "EC YÊU CẦU"}
+        ten_cot_highlight = tu_dien_cot_bang[ten_hien_thi]
+        
         def_n, def_s = (8.1, 5.0) if bien_goc == "so_lan_tuoi" else (0.38, 0.14) if bien_goc == "tbec" else (0.90, 0.16)
         nguong = st.number_input(f"📈 Ngưỡng bắt đầu", value=def_n)
         sai_so = st.number_input(f"✂️ Sai số cắt GĐ", value=def_s)
@@ -225,7 +220,7 @@ def main():
         mua_vu = tim_kiem_cac_mua_vu(so_cai, bien_goc, nguong)
         if not mua_vu: st.warning("Không tìm thấy vụ mùa nào thỏa mãn ngưỡng!"); return
 
-        # CHỌN MÙA VỤ ĐỂ PHÂN TÍCH SÂU
+        # CHỌN MÙA VỤ
         st.markdown("---")
         ten_vu = [f"Vụ {i+1}: {v[0].strftime('%d/%m')} - {v[1].strftime('%d/%m')}" for i, v in enumerate(mua_vu)]
         vi_tri_vu = st.selectbox("🌾 3. Chọn Mùa Vụ Để Vẽ Biểu Đồ & Phân Tích Sâu", range(len(mua_vu)), format_func=lambda x: ten_vu[x])
@@ -261,37 +256,42 @@ def main():
         fig = ve_bieu_do_chi_so_duoc_chon(so_cai, gd_list, ten_hien_thi, bien_goc, vi_tri_gd_highlight)
         st.pyplot(fig, use_container_width=True)
         
-        # BẢNG DỮ LIỆU ĐÃ LÀM TRÒN VÀ CHỈNH TÊN CỘT (KHÔNG DÙNG PANDAS)
+        # BẢNG DỮ LIỆU VỚI PANDAS VÀ HIGHLIGHT
         st.markdown("### 📋 Bảng Số Liệu Chi Tiết")
         bang_data = []
         for i, gd in enumerate(gd_list):
             if vi_tri_gd_highlight is not None and vi_tri_gd_highlight != i:
                 continue 
-                
             for n in gd:
-                row = {
+                bang_data.append({
                     "Giai đoạn": f"GĐ {i+1}", 
                     "Ngày": n,
                     "LẦN TƯỚI": so_cai[n]['so_lan_tuoi'],
                     "PHÚT TƯỚI": so_cai[n]['thoi_gian_tuoi_phut'],
                     "TBEC": round(so_cai[n]['tbec'], 2),
                     "EC YÊU CẦU": round(so_cai[n]['ec_yeu_cau'], 2)
-                }
-                bang_data.append(row)
+                })
                 
         if bang_data:
-            st.dataframe(bang_data, use_container_width=True)
+            df = pd.DataFrame(bang_data)
+            
+            # Hàm tô màu cột được chọn
+            def to_mau_cot(s):
+                if s.name == ten_cot_highlight:
+                    return ['background-color: rgba(255, 204, 0, 0.3); font-weight: bold; color: #d35400'] * len(s)
+                return [''] * len(s)
+            
+            st.dataframe(df.style.apply(to_mau_cot), use_container_width=True)
         else:
             st.info("Không có dữ liệu để hiển thị bảng.")
 
         # =================================================================
-        # KÍNH LÚP TRA CỨU TOÀN CỤC ĐƯỢC CHUYỂN XUỐNG ĐÂY
+        # KÍNH LÚP TRA CỨU TOÀN CỤC (CUỐI TRANG)
         # =================================================================
         tu_dien_tra_cuu_toan_cuc = {}
         for vi_tri_vu_tc, vu_tc in enumerate(mua_vu):
             cac_ngay_vu_tc = sorted([n for n in so_cai.keys() if vu_tc[0] <= datetime.strptime(n, "%Y-%m-%d").date() <= vu_tc[1]])
             gd_list_tc = chia_nho_mua_vu_thanh_cac_giai_doan(cac_ngay_vu_tc, so_cai, bien_goc, sai_so)
-            
             for vi_tri_gd_tc, gd_tc in enumerate(gd_list_tc):
                 for ngay_str in gd_tc:
                     ngay_kieu_date = datetime.strptime(ngay_str, "%Y-%m-%d").date()
@@ -304,25 +304,18 @@ def main():
 
         st.markdown("---")
         st.subheader("🔍 Kính Lúp Tra Cứu Toàn Cục")
-        st.caption("Chọn một khoảng thời gian bất kỳ để xem nhanh cây đang ở Vụ nào, ngày thứ mấy, giai đoạn nào mà không làm ảnh hưởng đến biểu đồ tổng.")
+        st.caption("Tra cứu nhanh thông tin ngày bất kỳ (không ảnh hưởng biểu đồ bên trên).")
         
         col_k1, col_k2 = st.columns([1, 2])
         with col_k1:
             ngay_nho_nhat_data = min(tu_dien_tra_cuu_toan_cuc.keys())
             ngay_lon_nhat_data = max(tu_dien_tra_cuu_toan_cuc.keys())
-            
-            khoang_thoi_gian_tra_cuu = st.date_input(
-                "🗓️ Chọn khoảng thời gian:", 
-                value=[], 
-                min_value=ngay_nho_nhat_data, 
-                max_value=ngay_lon_nhat_data
-            )
+            khoang_thoi_gian_tra_cuu = st.date_input("🗓️ Chọn khoảng thời gian:", value=[], min_value=ngay_nho_nhat_data, max_value=ngay_lon_nhat_data)
         
         with col_k2:
             if len(khoang_thoi_gian_tra_cuu) == 2:
                 ngay_bd_tc, ngay_kt_tc = khoang_thoi_gian_tra_cuu
                 ket_qua_tra_cuu = []
-                
                 tong_so_ngay = (ngay_kt_tc - ngay_bd_tc).days
                 for i in range(tong_so_ngay + 1):
                     ngay_dang_xet = ngay_bd_tc + timedelta(days=i)
@@ -334,23 +327,14 @@ def main():
                             "Tiến Độ": f"Ngày thứ {thong_tin['Ngày Thứ']}",
                             "Giai Đoạn": thong_tin["Giai Đoạn"]
                         })
-                
-                if ket_qua_tra_cuu:
-                    st.dataframe(ket_qua_tra_cuu, use_container_width=True)
-                else:
-                    st.info("💡 Nông trại đang nghỉ ngơi, không có dữ liệu mùa vụ nào trong khoảng thời gian này.")
+                if ket_qua_tra_cuu: st.dataframe(ket_qua_tra_cuu, use_container_width=True)
+                else: st.info("💡 Không có dữ liệu mùa vụ trong khoảng này.")
 
     else:
         st.info("👈 Vui lòng tải lên và chọn tệp JSON để bắt đầu.")
 
-    # --- CHỮ KÝ FOOTER ---
     st.markdown("---")
-    st.markdown(
-        "<div style='text-align: center; color: #888888; padding: 20px; font-weight: bold; font-style: italic;'>"
-        "CODED BY QUANG SKIBIDI DOPYEYE-GEMINI 👽, PLS DONATED ME<br>YOU CAN DONATE TO XXXXXXXXXXX"
-        "</div>", 
-        unsafe_allow_html=True
-    )
+    st.markdown("<div style='text-align: center; color: #888888; padding: 20px; font-weight: bold; font-style: italic;'>CODED BY QUANG SKIBIDI DOPYEYE-GEMINI 👽</div>", unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
