@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 
 # =====================================================================
-# PHẦN 1: CẤU HÌNH CÁC QUY TẮC CHUNG
+# PHẦN 1 & 2: CẤU HÌNH VÀ HÀM XỬ LÝ DỮ LIỆU (GIỮ NGUYÊN)
 # =====================================================================
 CAU_HINH_QUY_TAC = {
     "GIAY_TUOI_TOI_THIEU": 20,     
@@ -14,46 +14,32 @@ CAU_HINH_QUY_TAC = {
     "SO_NGAY_TOI_THIEU_MOT_VU": 7  
 }
 
-# =====================================================================
-# PHẦN 2: CÁC HÀM XỬ LÝ DỮ LIỆU
-# =====================================================================
-
 def lay_gia_tri_so_thuc_tu_chuoi(dong_du_lieu, danh_sach_tu_khoa):
     for tu_khoa in danh_sach_tu_khoa:
         gia_tri_tim_thay = dong_du_lieu.get(tu_khoa)
         if gia_tri_tim_thay is not None:
             try:
-                chuoi_gia_tri = str(gia_tri_tim_thay).replace(',', '.')
-                return float(chuoi_gia_tri) / 100.0 
-            except (ValueError, TypeError):
-                continue
+                return float(str(gia_tri_tim_thay).replace(',', '.')) / 100.0 
+            except (ValueError, TypeError): continue
     return None
 
-def ham_lay_thoi_gian_de_sap_xep(dong_du_lieu):
-    return dong_du_lieu['Thời gian']
+def ham_lay_thoi_gian_de_sap_xep(dong_du_lieu): return dong_du_lieu['Thời gian']
 
 def tao_so_cai_du_lieu_tong_hop(danh_sach_tep_tin_nho_giot, danh_sach_tep_tin_cham_phan, khu_vuc_duoc_chon):
     du_lieu_tam_thoi_theo_ngay = {}
-
     if danh_sach_tep_tin_nho_giot:
         toan_bo_du_lieu_nho_giot = []
         for tep_tin in danh_sach_tep_tin_nho_giot:
             tep_tin.seek(0)
-            du_lieu_trong_tep = json.load(tep_tin)
-            for dong in du_lieu_trong_tep: toan_bo_du_lieu_nho_giot.append(dong)
+            for dong in json.load(tep_tin): toan_bo_du_lieu_nho_giot.append(dong)
         
         du_lieu_nho_giot_da_loc = [d for d in toan_bo_du_lieu_nho_giot if str(d.get('STT')) == khu_vuc_duoc_chon]
         du_lieu_nho_giot_da_loc.sort(key=ham_lay_thoi_gian_de_sap_xep)
 
         for dong_du_lieu in du_lieu_nho_giot_da_loc:
-            try:
-                thoi_diem = datetime.strptime(dong_du_lieu['Thời gian'], "%Y-%m-%d %H-%M-%S")
-                ngay_str = thoi_diem.strftime("%Y-%m-%d")
+            try: ngay_str = datetime.strptime(dong_du_lieu['Thời gian'], "%Y-%m-%d %H-%M-%S").strftime("%Y-%m-%d")
             except: continue 
-                
-            if ngay_str not in du_lieu_tam_thoi_theo_ngay: 
-                du_lieu_tam_thoi_theo_ngay[ngay_str] = {'so_lan_tuoi': 0, 'tong_so_giay_tuoi': 0, 'danh_sach_tbec': [], 'danh_sach_ec_yeu_cau': []}
-                
+            if ngay_str not in du_lieu_tam_thoi_theo_ngay: du_lieu_tam_thoi_theo_ngay[ngay_str] = {'so_lan_tuoi': 0, 'tong_so_giay_tuoi': 0, 'danh_sach_tbec': [], 'danh_sach_ec_yeu_cau': []}
             gia_tri_tbec = lay_gia_tri_so_thuc_tu_chuoi(dong_du_lieu, ['TBEC', 'tbec'])
             if gia_tri_tbec is not None: du_lieu_tam_thoi_theo_ngay[ngay_str]['danh_sach_tbec'].append(gia_tri_tbec)
 
@@ -71,13 +57,11 @@ def tao_so_cai_du_lieu_tong_hop(danh_sach_tep_tin_nho_giot, danh_sach_tep_tin_ch
     if danh_sach_tep_tin_cham_phan:
         for tep_tin in danh_sach_tep_tin_cham_phan:
             tep_tin.seek(0)
-            du_lieu_trong_tep = json.load(tep_tin)
-            for dong_du_lieu in du_lieu_trong_tep:
+            for dong_du_lieu in json.load(tep_tin):
                 if str(dong_du_lieu.get('STT')) != khu_vuc_duoc_chon: continue 
                 try: ngay_str = datetime.strptime(dong_du_lieu['Thời gian'], "%Y-%m-%d %H-%M-%S").strftime("%Y-%m-%d")
                 except: continue
-                if ngay_str not in du_lieu_tam_thoi_theo_ngay: 
-                    du_lieu_tam_thoi_theo_ngay[ngay_str] = {'so_lan_tuoi': 0, 'tong_so_giay_tuoi': 0, 'danh_sach_tbec': [], 'danh_sach_ec_yeu_cau': []}
+                if ngay_str not in du_lieu_tam_thoi_theo_ngay: du_lieu_tam_thoi_theo_ngay[ngay_str] = {'so_lan_tuoi': 0, 'tong_so_giay_tuoi': 0, 'danh_sach_tbec': [], 'danh_sach_ec_yeu_cau': []}
                 gia_tri_ec_yc = lay_gia_tri_so_thuc_tu_chuoi(dong_du_lieu, ['EC yêu cầu', 'ecreq'])
                 if gia_tri_ec_yc is not None: du_lieu_tam_thoi_theo_ngay[ngay_str]['danh_sach_ec_yeu_cau'].append(gia_tri_ec_yc)
 
@@ -93,9 +77,8 @@ def tao_so_cai_du_lieu_tong_hop(danh_sach_tep_tin_nho_giot, danh_sach_tep_tin_ch
 
 def tim_kiem_cac_mua_vu(so_cai_du_lieu, ten_chi_so_lam_goc, nguong_gia_tri_bat_dau):
     danh_sach_ngay = sorted([datetime.strptime(ngay, "%Y-%m-%d").date() for ngay, d in so_cai_du_lieu.items() if d[ten_chi_so_lam_goc] >= nguong_gia_tri_bat_dau])
-    danh_sach_cac_mua_vu = []
     if not danh_sach_ngay: return []
-    
+    danh_sach_cac_mua_vu = []
     ngay_bat_dau_vu = danh_sach_ngay[0]
     for i in range(1, len(danh_sach_ngay)):
         if (danh_sach_ngay[i] - danh_sach_ngay[i-1]).days > CAU_HINH_QUY_TAC["SO_NGAY_NGHI_TOI_DA"]:
@@ -111,12 +94,10 @@ def chia_nho_mua_vu_thanh_cac_giai_doan(danh_sach_ngay_trong_vu, so_cai_du_lieu,
     danh_sach_cac_giai_doan = []
     giai_doan_hien_tai = [danh_sach_ngay_trong_vu[0]]
     ngay_nghi_ngo = None 
-
     for i in range(1, len(danh_sach_ngay_trong_vu)):
         ngay_xet = danh_sach_ngay_trong_vu[i]
         val_xet = so_cai_du_lieu[ngay_xet][ten_chi_so_lam_goc]
         val_moc = so_cai_du_lieu[giai_doan_hien_tai[0]][ten_chi_so_lam_goc]
-        
         if abs(val_xet - val_moc) >= sai_so_cho_phep:
             if ngay_nghi_ngo is None:
                 ngay_nghi_ngo = ngay_xet
@@ -129,13 +110,8 @@ def chia_nho_mua_vu_thanh_cac_giai_doan(danh_sach_ngay_trong_vu, so_cai_du_lieu,
         else:
             ngay_nghi_ngo = None
             giai_doan_hien_tai.append(ngay_xet)
-            
     danh_sach_cac_giai_doan.append(giai_doan_hien_tai)
     return danh_sach_cac_giai_doan
-
-# =====================================================================
-# PHẦN 3: HÀM VẼ BIỂU ĐỒ (HỖ TRỢ TÍNH NĂNG HIGHLIGHT GIAI ĐOẠN)
-# =====================================================================
 
 def ve_bieu_do_chi_so_duoc_chon(du_lieu_tong_hop, danh_sach_cac_giai_doan, ten_chi_so_hien_thi, ten_bien_trong_so_cai, vi_tri_gd_highlight=None):
     khung_tranh = plt.figure(figsize=(16, 6))
@@ -147,11 +123,8 @@ def ve_bieu_do_chi_so_duoc_chon(du_lieu_tong_hop, danh_sach_cac_giai_doan, ten_c
     
     for i, gd in enumerate(danh_sach_cac_giai_doan):
         mau = bang_mau[i % len(bang_mau)]
-        
-        # LOGIC TÔ SÁNG/LÀM MỜ (HIGHLIGHT)
-        do_trong_suot = 1.0 # Mặc định sáng 100%
-        if vi_tri_gd_highlight is not None and vi_tri_gd_highlight != i:
-            do_trong_suot = 0.2 # Nếu không được chọn thì mờ đi chỉ còn 20%
+        do_trong_suot = 1.0 
+        if vi_tri_gd_highlight is not None and vi_tri_gd_highlight != i: do_trong_suot = 0.2 
             
         du_lieu_y = []
         for n in gd:
@@ -168,138 +141,154 @@ def ve_bieu_do_chi_so_duoc_chon(du_lieu_tong_hop, danh_sach_cac_giai_doan, ten_c
     
     buoc = max(1, len(danh_sach_ngay_ve) // 25)
     plt.xticks(np.arange(len(danh_sach_ngay_ve))[::buoc], [n[-5:] for n in danh_sach_ngay_ve[::buoc]], rotation=45)
-    plt.title(f"Phân tích theo: {ten_chi_so_hien_thi}")
+    plt.title(f"Phân tích theo: {ten_chi_so_hien_thi}", pad=20)
+    
+    # Loại bỏ viền trên và viền phải của biểu đồ cho hiện đại hơn
+    truc_toa_do.spines['top'].set_visible(False)
+    truc_toa_do.spines['right'].set_visible(False)
+    
     plt.tight_layout()
     return khung_tranh
 
 # =====================================================================
-# PHẦN 4: GIAO DIỆN STREAMLIT
+# PHẦN 3: GIAO DIỆN STREAMLIT "ĐỈNH CAO" 🚀
 # =====================================================================
 
 def main():
-    st.set_page_config(page_title="TOOL UI HỆ THỐNG TỰ ĐỘNG NÔNG  NGHIỆP V1.5", layout="wide")
-    st.title("📊 Bảng Điều Khiển Nông Nghiệp Thông Minh")
+    st.set_page_config(page_title="AgriDash Pro", page_icon="🌱", layout="wide")
     
+    # Header chính
+    st.title("🌱 TOOL UI PHÂN TÍCH NÔNG NGHIỆP V1.8")
+    st.markdown("Hệ thống tự động bóc tách dữ liệu JSON và trực quan hóa các giai đoạn phát triển của cây trồng.")
+    st.markdown("---")
+    
+    # Sidebar cấu hình
     with st.sidebar:
-        st.header("📂 1. Cấu hình dữ liệu")
-        tep_nho_giot = st.file_uploader("Tệp Nhỏ giọt (JSON)", accept_multiple_files=True)
-        tep_cham_phan = st.file_uploader("Tệp Châm phân (JSON)", accept_multiple_files=True)
-        khu_vuc = st.selectbox("Khu vực", ["1", "2", "3", "4"])
+        st.header("📂 Dữ liệu đầu vào")
+        tep_nho_giot = st.file_uploader("1. Tải lên tệp Nhỏ giọt", accept_multiple_files=True)
+        tep_cham_phan = st.file_uploader("2. Tải lên tệp Châm phân", accept_multiple_files=True)
+        khu_vuc = st.selectbox("🌍 Khu vực canh tác", ["1", "2", "3", "4"])
         
         st.markdown("---")
-        st.header("⚙️ 2. Cài đặt thuật toán")
+        st.header("⚙️ Bộ não phân tích")
         tu_dien = {"Lần tưới": "so_lan_tuoi", "TBEC": "tbec", "EC Yêu cầu": "ec_yeu_cau"}
-        ten_hien_thi = st.selectbox("🎯 Chỉ số làm mốc", list(tu_dien.keys()))
+        ten_hien_thi = st.selectbox("🎯 Chỉ số phân tách", list(tu_dien.keys()))
         bien_goc = tu_dien[ten_hien_thi]
         
         def_n, def_s = (8.1, 5.0) if bien_goc == "so_lan_tuoi" else (0.38, 0.14) if bien_goc == "tbec" else (0.90, 0.16)
-        nguong = st.number_input(f"📈 Ngưỡng bắt đầu", value=def_n)
-        sai_so = st.number_input(f"✂️ Sai số cắt GĐ", value=def_s)
+        
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            nguong = st.number_input(f"Ngưỡng kích hoạt", value=def_n, step=0.1)
+        with col_s2:
+            sai_so = st.number_input(f"Sai số cắt GĐ", value=def_s, step=0.01)
 
     if tep_nho_giot and tep_cham_phan:
         so_cai = tao_so_cai_du_lieu_tong_hop(tep_nho_giot, tep_cham_phan, khu_vuc)
-        if not so_cai: st.error("Không có dữ liệu!"); return
+        if not so_cai: st.error("Dữ liệu rỗng hoặc sai cấu trúc!"); return
             
         mua_vu = tim_kiem_cac_mua_vu(so_cai, bien_goc, nguong)
-        if not mua_vu: st.warning("Không tìm thấy vụ mùa nào thỏa mãn ngưỡng!"); return
+        if not mua_vu: st.warning("Trạng thái: Nông trại đang nghỉ ngơi, không có vụ nào vượt ngưỡng."); return
 
-        # =================================================================
-        # XÂY DỰNG TỪ ĐIỂN TRA CỨU TOÀN CỤC CHO MỌI VỤ
-        # =================================================================
+        # Tạo từ điển toàn cục (Cho Kính lúp)
         tu_dien_tra_cuu_toan_cuc = {}
         for vi_tri_vu_tc, vu_tc in enumerate(mua_vu):
             cac_ngay_vu_tc = sorted([n for n in so_cai.keys() if vu_tc[0] <= datetime.strptime(n, "%Y-%m-%d").date() <= vu_tc[1]])
             gd_list_tc = chia_nho_mua_vu_thanh_cac_giai_doan(cac_ngay_vu_tc, so_cai, bien_goc, sai_so)
-            
             for vi_tri_gd_tc, gd_tc in enumerate(gd_list_tc):
                 for ngay_str in gd_tc:
                     ngay_kieu_date = datetime.strptime(ngay_str, "%Y-%m-%d").date()
-                    ngay_thu = (ngay_kieu_date - vu_tc[0]).days + 1
                     tu_dien_tra_cuu_toan_cuc[ngay_kieu_date] = {
                         "Vụ Mùa": f"Vụ {vi_tri_vu_tc + 1}",
-                        "Ngày Thứ": ngay_thu,
-                        "Giai Đoạn": f"Giai đoạn {vi_tri_gd_tc + 1}"
+                        "Ngày Thứ": (ngay_kieu_date - vu_tc[0]).days + 1,
+                        "Giai Đoạn": f"GĐ {vi_tri_gd_tc + 1}"
                     }
 
-        # TÍNH NĂNG 1: TRA CỨU BẰNG KÍNH LÚP 
-        st.markdown("---")
-        st.subheader("🔍 Kính Lúp Tra Cứu Toàn Cục")
-        st.caption("Chọn một khoảng thời gian bất kỳ để xem nhanh cây đang ở Vụ nào, ngày thứ mấy, giai đoạn nào mà không làm ảnh hưởng đến biểu đồ tổng.")
-        
-        ngay_nho_nhat_data = min(tu_dien_tra_cuu_toan_cuc.keys())
-        ngay_lon_nhat_data = max(tu_dien_tra_cuu_toan_cuc.keys())
-        
-        khoang_thoi_gian_tra_cuu = st.date_input(
-            "🗓️ Chọn khoảng thời gian:", 
-            value=[], # Bỏ trống mặc định để người dùng tự click chọn
-            min_value=ngay_nho_nhat_data, 
-            max_value=ngay_lon_nhat_data
-        )
-        
-        if len(khoang_thoi_gian_tra_cuu) == 2:
-            ngay_bd_tc, ngay_kt_tc = khoang_thoi_gian_tra_cuu
-            ket_qua_tra_cuu = []
-            
-            tong_so_ngay = (ngay_kt_tc - ngay_bd_tc).days
-            for i in range(tong_so_ngay + 1):
-                ngay_dang_xet = ngay_bd_tc + timedelta(days=i)
-                if ngay_dang_xet in tu_dien_tra_cuu_toan_cuc:
-                    thong_tin = tu_dien_tra_cuu_toan_cuc[ngay_dang_xet]
-                    ket_qua_tra_cuu.append({
-                        "Ngày": ngay_dang_xet.strftime("%d/%m/%Y"),
-                        "Thuộc Vụ": thong_tin["Vụ Mùa"],
-                        "Tiến Độ": f"Ngày thứ {thong_tin['Ngày Thứ']}",
-                        "Giai Đoạn": thong_tin["Giai Đoạn"]
-                    })
-            
-            if ket_qua_tra_cuu:
-                st.dataframe(ket_qua_tra_cuu, use_container_width=True)
-            else:
-                st.info("💡 Nông trại đang nghỉ ngơi, không có dữ liệu mùa vụ nào trong khoảng thời gian này.")
-
-        # CHỌN MÙA VỤ ĐỂ VẼ BIỂU ĐỒ
-        st.markdown("---")
-        ten_vu = [f"Vụ {i+1}: {v[0].strftime('%d/%m')} - {v[1].strftime('%d/%m')}" for i, v in enumerate(mua_vu)]
-        vi_tri_vu = st.selectbox("🌾 3. Chọn Mùa Vụ Để Vẽ Biểu Đồ & Phân Tích Sâu", range(len(mua_vu)), format_func=lambda x: ten_vu[x])
+        # KHU VỰC BẢNG ĐIỀU KHIỂN CHÍNH
+        ten_vu = [f"Vụ {i+1}: {v[0].strftime('%d/%m/%Y')} ➔ {v[1].strftime('%d/%m/%Y')}" for i, v in enumerate(mua_vu)]
+        vi_tri_vu = st.selectbox("🌾 LỰA CHỌN MÙA VỤ ĐỂ PHÂN TÍCH:", range(len(mua_vu)), format_func=lambda x: ten_vu[x])
         
         vu_chot = mua_vu[vi_tri_vu]
         cac_ngay_vu = sorted([n for n in so_cai.keys() if vu_chot[0] <= datetime.strptime(n, "%Y-%m-%d").date() <= vu_chot[1]])
         gd_list = chia_nho_mua_vu_thanh_cac_giai_doan(cac_ngay_vu, so_cai, bien_goc, sai_so)
         
-        # TÍNH NĂNG 2: BỘ LỌC HIGHLIGHT GIAI ĐOẠN
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            st.success(f"✅ Đã phân tích được **{len(gd_list)} giai đoạn** cho {ten_vu[vi_tri_vu]}.")
-        with col2:
-            danh_sach_chon_gd = ["Tất cả"] + [f"Giai đoạn {i+1}" for i in range(len(gd_list))]
-            gd_duoc_chon = st.selectbox("🔦 Làm nổi bật Giai đoạn:", danh_sach_chon_gd)
-            
-        vi_tri_gd_highlight = None
-        if gd_duoc_chon != "Tất cả":
-            vi_tri_gd_highlight = danh_sach_chon_gd.index(gd_duoc_chon) - 1
-
-        # VẼ BIỂU ĐỒ CÓ TRUYỀN BIẾN HIGHLIGHT
-        st.pyplot(ve_bieu_do_chi_so_duoc_chon(so_cai, gd_list, ten_hien_thi, bien_goc, vi_tri_gd_highlight))
+        # --- THẺ CHỈ SỐ NHANH (METRIC CARDS) ---
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Tổng thời gian vụ", f"{len(cac_ngay_vu)} ngày", "Hoàn thành")
+        m2.metric("Số giai đoạn sinh trưởng", f"{len(gd_list)} GĐ", "Đã tách")
+        tb_tbec = np.mean([so_cai[n]['tbec'] for n in cac_ngay_vu])
+        m3.metric("TBEC Trung bình", f"{tb_tbec:.2f}")
+        tb_tuoi = np.mean([so_cai[n]['so_lan_tuoi'] for n in cac_ngay_vu])
+        m4.metric("Tần suất tưới TB", f"{int(tb_tuoi)} lần/ngày")
         
-        # BẢNG DỮ LIỆU CŨNG ĐƯỢC LỌC THEO BỘ CHỌN
-        bang_data = []
-        for i, gd in enumerate(gd_list):
-            if vi_tri_gd_highlight is not None and vi_tri_gd_highlight != i:
-                continue # Nếu đang bật kính lúp mà không phải GD này thì bỏ qua không nạp vào bảng
+        st.markdown("<br>", unsafe_allow_html=True) # Tạo khoảng trống cho đẹp
+        
+        # --- THIẾT KẾ CÁC TAB HIỂN THỊ ---
+        tab1, tab2, tab3 = st.tabs(["📊 TỔNG QUAN BIỂU ĐỒ", "📋 BẢNG SỐ LIỆU CHI TIẾT", "🔍 KÍNH LÚP TRA CỨU"])
+        
+        # TAB 1: BIỂU ĐỒ & LỌC GIAI ĐOẠN
+        with tab1:
+            col_chart_1, col_chart_2 = st.columns([3, 1])
+            with col_chart_2:
+                st.info("💡 **Góc nhìn tập trung**")
+                danh_sach_chon_gd = ["Tất cả"] + [f"Giai đoạn {i+1}" for i in range(len(gd_list))]
+                gd_duoc_chon = st.radio("Làm nổi bật (Highlight):", danh_sach_chon_gd)
                 
-            for n in gd:
-                row = {"Giai đoạn": f"GĐ {i+1}", "Ngày": n}
-                row.update({k.upper(): v for k, v in so_cai[n].items()})
-                bang_data.append(row)
-        st.dataframe(bang_data, use_container_width=True)
-    else:
-        st.info("👈 Vui lòng tải lên tệp JSON để bắt đầu.")
+            vi_tri_gd_highlight = None if gd_duoc_chon == "Tất cả" else danh_sach_chon_gd.index(gd_duoc_chon) - 1
+            
+            with col_chart_1:
+                st.pyplot(ve_bieu_do_chi_so_duoc_chon(so_cai, gd_list, ten_hien_thi, bien_goc, vi_tri_gd_highlight))
+                
+        # TAB 2: BẢNG DỮ LIỆU CÓ THỂ LỌC
+        with tab2:
+            st.caption(f"Đang hiển thị dữ liệu cho: **{gd_duoc_chon}**")
+            bang_data = []
+            for i, gd in enumerate(gd_list):
+                if vi_tri_gd_highlight is not None and vi_tri_gd_highlight != i: continue
+                for n in gd:
+                    row = {"Giai đoạn": f"GĐ {i+1}", "Ngày": n}
+                    row.update({k.upper(): v for k, v in so_cai[n].items()})
+                    bang_data.append(row)
+            st.dataframe(bang_data, use_container_width=True, height=400)
+            
+        # TAB 3: KÍNH LÚP TOÀN CỤC
+        with tab3:
+            st.caption("Khung thời gian này cho phép bạn quét xuyên không gian để xem tình trạng của bất kỳ ngày nào.")
+            col_k1, col_k2 = st.columns([1, 2])
+            with col_k1:
+                ngay_nho_nhat_data = min(tu_dien_tra_cuu_toan_cuc.keys())
+                ngay_lon_nhat_data = max(tu_dien_tra_cuu_toan_cuc.keys())
+                khoang_thoi_gian_tra_cuu = st.date_input("🗓️ Chọn khoảng thời gian:", value=[], min_value=ngay_nho_nhat_data, max_value=ngay_lon_nhat_data)
+            
+            with col_k2:
+                if len(khoang_thoi_gian_tra_cuu) == 2:
+                    ngay_bd_tc, ngay_kt_tc = khoang_thoi_gian_tra_cuu
+                    ket_qua_tra_cuu = []
+                    tong_so_ngay = (ngay_kt_tc - ngay_bd_tc).days
+                    for i in range(tong_so_ngay + 1):
+                        ngay_dang_xet = ngay_bd_tc + timedelta(days=i)
+                        if ngay_dang_xet in tu_dien_tra_cuu_toan_cuc:
+                            thong_tin = tu_dien_tra_cuu_toan_cuc[ngay_dang_xet]
+                            ket_qua_tra_cuu.append({
+                                "Ngày": ngay_dang_xet.strftime("%d/%m/%Y"),
+                                "Thuộc Vụ": thong_tin["Vụ Mùa"],
+                                "Tiến Độ": f"Ngày thứ {thong_tin['Ngày Thứ']}",
+                                "Giai Đoạn": thong_tin["Giai Đoạn"]
+                            })
+                    if ket_qua_tra_cuu: st.dataframe(ket_qua_tra_cuu, use_container_width=True)
+                    else: st.info("Không có hoạt động canh tác nào trong khoảng ngày này.")
+                else:
+                    st.info("👈 Vui lòng chọn đủ Ngày Bắt Đầu và Ngày Kết Thúc.")
 
-    # --- CHỮ KÝ FOOTER (ĐÃ SỬA LỖI XUỐNG DÒNG) ---
+    else:
+        st.info("👈 Vui lòng tải lên tệp dữ liệu tại cột bên trái để đánh thức hệ thống.")
+
+    # --- CHỮ KÝ FOOTER VIP ---
+    st.markdown("<br><br><br>", unsafe_allow_html=True) # Đẩy footer xuống dưới cùng
     st.markdown("---")
     st.markdown(
-        "<div style='text-align: center; color: #888888; padding: 20px; font-weight: bold; font-style: italic;'>"
-        "CODED BY QUANG SKIBIDI DOPYEYE-GEMINI 👽, PLS DONATED ME<br>YOU CAN DONATE TO XXXXXXXXXXX"
+        "<div style='text-align: center; color: #888888; font-size: 14px; font-weight: 500; font-style: italic; letter-spacing: 1px;'>"
+        "CODED BY QUANG SKIBIDI DOPYEYE-GEMINI 👽<br><span style='color: #4CAF50;'>PLS DONATE ME ☕</span>"
         "</div>", 
         unsafe_allow_html=True
     )
