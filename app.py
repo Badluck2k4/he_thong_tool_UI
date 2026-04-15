@@ -25,7 +25,8 @@ def lay_gia_tri_so_thuc_tu_chuoi(dong_du_lieu, danh_sach_tu_khoa):
         if gia_tri_tim_thay is not None:
             try:
                 chuoi_gia_tri = str(gia_tri_tim_thay).replace(',', '.')
-                return float(chuoi_gia_tri)
+                # Chia 100 tại đây để chuẩn hóa toàn bộ chỉ số EC
+                return float(chuoi_gia_tri) / 100.0 
             except (ValueError, TypeError):
                 continue
     return None
@@ -181,6 +182,9 @@ def chia_nho_mua_vu_thanh_cac_giai_doan(danh_sach_ngay_trong_vu, so_cai_du_lieu,
     ngay_dau_tien = danh_sach_ngay_trong_vu[0]
     giai_doan_hien_tai.append(ngay_dau_tien)
     
+    # Bổ sung: Biến theo dõi trạng thái "xác nhận kép" liên tiếp 2 ngày
+    ngay_nghi_ngo_bien_dong = None 
+    
     for vi_tri in range(1, len(danh_sach_ngay_trong_vu)):
         ngay_dang_xet = danh_sach_ngay_trong_vu[vi_tri]
         ngay_moc_cua_giai_doan = giai_doan_hien_tai[0] 
@@ -191,19 +195,34 @@ def chia_nho_mua_vu_thanh_cac_giai_doan(danh_sach_ngay_trong_vu, so_cai_du_lieu,
         muc_chenh_lech = abs(gia_tri_cua_ngay_dang_xet - gia_tri_cua_ngay_moc)
         
         if muc_chenh_lech >= sai_so_cho_phep:
-            # Lưu giai đoạn cũ lại
-            danh_sach_cac_giai_doan_hoan_thien.append(giai_doan_hien_tai)
-            # Khởi tạo giai đoạn mới bắt đầu bằng ngày hiện tại
-            giai_doan_hien_tai = []
-            giai_doan_hien_tai.append(ngay_dang_xet)
+            if ngay_nghi_ngo_bien_dong is None:
+                # TRƯỜNG HỢP 1: Ngày đầu tiên phát hiện lệch
+                # Đưa vào diện tình nghi, thêm tạm vào giai đoạn cũ chứ CHƯA CẮT
+                ngay_nghi_ngo_bien_dong = ngay_dang_xet
+                giai_doan_hien_tai.append(ngay_dang_xet)
+            else:
+                # TRƯỜNG HỢP 2: Ngày thứ 2 liên tiếp vẫn lệch -> CHÍNH THỨC CẮT
+                # Rút ngày tình nghi của hôm qua ra khỏi giai đoạn cũ
+                giai_doan_hien_tai.pop() 
+                danh_sach_cac_giai_doan_hoan_thien.append(giai_doan_hien_tai)
+                
+                # Bắt đầu giai đoạn mới tính từ đúng ngày phát hiện biến động (ngày hôm qua)
+                giai_doan_hien_tai = [ngay_nghi_ngo_bien_dong, ngay_dang_xet]
+                ngay_nghi_ngo_bien_dong = None # Reset lại trạng thái
         else:
+            # TRƯỜNG HỢP 3: Giá trị không lệch (hoặc lệch rồi lại tụt về bình thường)
+            # Đây là nhiễu, hủy bỏ tình trạng nghi ngờ và thêm vào giai đoạn bình thường
+            ngay_nghi_ngo_bien_dong = None
             giai_doan_hien_tai.append(ngay_dang_xet)
             
-    danh_sach_cac_giai_doan_hoan_thien.append(giai_doan_hien_tai)
+    # Chốt sổ giai đoạn cuối cùng
+    if len(giai_doan_hien_tai) > 0:
+        danh_sach_cac_giai_doan_hoan_thien.append(giai_doan_hien_tai)
+        
     return danh_sach_cac_giai_doan_hoan_thien
 
 # =====================================================================
-# PHẦN 3: HÀM VẼ BIỂU ĐỒ (ĐÃ SỬA: CHỈ VẼ 1 BIỂU ĐỒ THEO CHỈ SỐ CHỌN)
+# PHẦN 3: HÀM VẼ BIỂU ĐỒ (CHỈ VẼ 1 BIỂU ĐỒ THEO CHỈ SỐ CHỌN)
 # =====================================================================
 
 def ve_bieu_do_chi_so_duoc_chon(du_lieu_tong_hop, danh_sach_cac_giai_doan, ten_chi_so_hien_thi, ten_bien_trong_so_cai):
@@ -263,7 +282,7 @@ def ve_bieu_do_chi_so_duoc_chon(du_lieu_tong_hop, danh_sach_cac_giai_doan, ten_c
 
 def main():
     st.set_page_config(page_title="Phân Tích Dữ Liệu Nông Nghiệp", layout="wide")
-    st.title("📊 Hệ Thống Phân Tích Logic Hợp Nhất Dữ Liệu")
+    st.title("📊 Hệ Thống Phân Tích Logic Hợp Nhất Dữ Tại Liệu")
     
     with st.sidebar:
         st.header("📂 1. Tải Tệp Tin Dữ Liệu")
@@ -279,10 +298,13 @@ def main():
         ten_chi_so_hien_thi = st.selectbox("🎯 Chọn Chỉ số làm Mốc", list(tu_dien_chi_so_dieu_khien.keys()))
         ten_bien_chi_so_goc = tu_dien_chi_so_dieu_khien[ten_chi_so_hien_thi]
         
+        # Thiết lập ngưỡng và sai số mặc định riêng cho từng chỉ số
         if ten_bien_chi_so_goc == "so_lan_tuoi":
-            gia_tri_nguong_goi_y, gia_tri_sai_so_goi_y = 5.0, 2.0
-        else:
-            gia_tri_nguong_goi_y, gia_tri_sai_so_goi_y = 0.5, 0.3
+            gia_tri_nguong_goi_y, gia_tri_sai_so_goi_y = 8.1, 5.0
+        elif ten_bien_chi_so_goc == "tbec":
+            gia_tri_nguong_goi_y, gia_tri_sai_so_goi_y = 0.38, 0.14
+        else: # EC_yeu_cau
+            gia_tri_nguong_goi_y, gia_tri_sai_so_goi_y = 0.90, 0.16
             
         nguong_bat_dau_vu = st.number_input(f"📈 Ngưỡng Bắt Đầu Vụ ({ten_chi_so_hien_thi})", value=gia_tri_nguong_goi_y, step=0.1)
         sai_so_cat_giai_doan = st.number_input(f"✂️ Sai Số Cắt GĐ ({ten_chi_so_hien_thi})", value=gia_tri_sai_so_goi_y, step=0.1)
