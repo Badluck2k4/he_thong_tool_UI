@@ -134,7 +134,7 @@ def chia_nho_mua_vu_thanh_cac_giai_doan(danh_sach_ngay_trong_vu, so_cai_du_lieu,
     return danh_sach_cac_giai_doan
 
 # =====================================================================
-# PHẦN 3: HÀM VẼ BIỂU ĐỒ (CÓ HIGHLIGHT VÀ TINH CHỈNH GIAO DIỆN)
+# PHẦN 3: HÀM VẼ BIỂU ĐỒ (Giữ nguyên gốc để biểu đồ to rõ ràng)
 # =====================================================================
 
 def ve_bieu_do_chi_so_duoc_chon(du_lieu_tong_hop, danh_sach_cac_giai_doan, ten_chi_so_hien_thi, ten_bien_trong_so_cai, vi_tri_gd_highlight=None):
@@ -168,30 +168,23 @@ def ve_bieu_do_chi_so_duoc_chon(du_lieu_tong_hop, danh_sach_cac_giai_doan, ten_c
     
     buoc = max(1, len(danh_sach_ngay_ve) // 25)
     plt.xticks(np.arange(len(danh_sach_ngay_ve))[::buoc], [n[-5:] for n in danh_sach_ngay_ve[::buoc]], rotation=45)
-    plt.title(f"Phân tích theo: {ten_chi_so_hien_thi}", pad=20)
-    
-    # Loại bỏ viền trên và viền phải cho hiện đại hơn
-    truc_toa_do.spines['top'].set_visible(False)
-    truc_toa_do.spines['right'].set_visible(False)
-    
+    plt.title(f"Phân tích theo: {ten_chi_so_hien_thi}")
     plt.tight_layout()
     return khung_tranh
 
 # =====================================================================
-# PHẦN 4: GIAO DIỆN STREAMLIT ĐƯỢC TỐI ƯU
+# PHẦN 4: GIAO DIỆN STREAMLIT 
 # =====================================================================
 
 def main():
-    st.set_page_config(page_title="TOOL UI HỆ THỐNG TỰ ĐỘNG NÔNG NGHIỆP V1.5", page_icon="📊", layout="wide")
+    st.set_page_config(page_title="TOOL UI HỆ THỐNG TỰ ĐỘNG NÔNG NGHIỆP V1.5", layout="wide")
     st.title("📊 TOOL UI HỆ THỐNG TỰ ĐỘNG NÔNG NGHIỆP V1.5")
-    st.markdown("Hệ thống tự động bóc tách dữ liệu JSON, trực quan hóa và phân tích vòng đời cây trồng.")
-    st.markdown("---")
     
     with st.sidebar:
         st.header("📂 1. Cấu hình dữ liệu")
         tep_nho_giot = st.file_uploader("Tệp Nhỏ giọt (JSON)", accept_multiple_files=True)
         tep_cham_phan = st.file_uploader("Tệp Châm phân (JSON)", accept_multiple_files=True)
-        khu_vuc = st.selectbox("Khu vực canh tác", ["1", "2", "3", "4"])
+        khu_vuc = st.selectbox("Khu vực", ["1", "2", "3", "4"])
         
         st.markdown("---")
         st.header("⚙️ 2. Cài đặt thuật toán")
@@ -200,21 +193,19 @@ def main():
         bien_goc = tu_dien[ten_hien_thi]
         
         def_n, def_s = (8.1, 5.0) if bien_goc == "so_lan_tuoi" else (0.38, 0.14) if bien_goc == "tbec" else (0.90, 0.16)
-        
-        col_s1, col_s2 = st.columns(2)
-        with col_s1:
-            nguong = st.number_input(f"📈 Ngưỡng bắt đầu", value=def_n, step=0.1)
-        with col_s2:
-            sai_so = st.number_input(f"✂️ Sai số cắt GĐ", value=def_s, step=0.01)
+        nguong = st.number_input(f"📈 Ngưỡng bắt đầu", value=def_n)
+        sai_so = st.number_input(f"✂️ Sai số cắt GĐ", value=def_s)
 
     if tep_nho_giot and tep_cham_phan:
         so_cai = tao_so_cai_du_lieu_tong_hop(tep_nho_giot, tep_cham_phan, khu_vuc)
-        if not so_cai: st.error("Không có dữ liệu hợp lệ!"); return
+        if not so_cai: st.error("Không có dữ liệu!"); return
             
         mua_vu = tim_kiem_cac_mua_vu(so_cai, bien_goc, nguong)
         if not mua_vu: st.warning("Không tìm thấy vụ mùa nào thỏa mãn ngưỡng!"); return
 
+        # =================================================================
         # XÂY DỰNG TỪ ĐIỂN TRA CỨU TOÀN CỤC CHO MỌI VỤ
+        # =================================================================
         tu_dien_tra_cuu_toan_cuc = {}
         for vi_tri_vu_tc, vu_tc in enumerate(mua_vu):
             cac_ngay_vu_tc = sorted([n for n in so_cai.keys() if vu_tc[0] <= datetime.strptime(n, "%Y-%m-%d").date() <= vu_tc[1]])
@@ -230,24 +221,105 @@ def main():
                         "Giai Đoạn": f"Giai đoạn {vi_tri_gd_tc + 1}"
                     }
 
-        # KHU VỰC ĐIỀU KHIỂN MÙA VỤ
-        ten_vu = [f"Vụ {i+1}: {v[0].strftime('%d/%m/%Y')} ➔ {v[1].strftime('%d/%m/%Y')}" for i, v in enumerate(mua_vu)]
-        vi_tri_vu = st.selectbox("🌾 LỰA CHỌN MÙA VỤ ĐỂ PHÂN TÍCH:", range(len(mua_vu)), format_func=lambda x: ten_vu[x])
+        # TÍNH NĂNG 1: TRA CỨU BẰNG KÍNH LÚP 
+        st.markdown("---")
+        st.subheader("🔍 Kính Lúp Tra Cứu Toàn Cục")
+        st.caption("Chọn một khoảng thời gian bất kỳ để xem nhanh cây đang ở Vụ nào, ngày thứ mấy, giai đoạn nào mà không làm ảnh hưởng đến biểu đồ tổng.")
+        
+        col_k1, col_k2 = st.columns([1, 2])
+        with col_k1:
+            ngay_nho_nhat_data = min(tu_dien_tra_cuu_toan_cuc.keys())
+            ngay_lon_nhat_data = max(tu_dien_tra_cuu_toan_cuc.keys())
+            
+            khoang_thoi_gian_tra_cuu = st.date_input(
+                "🗓️ Chọn khoảng thời gian:", 
+                value=[], 
+                min_value=ngay_nho_nhat_data, 
+                max_value=ngay_lon_nhat_data
+            )
+        
+        with col_k2:
+            if len(khoang_thoi_gian_tra_cuu) == 2:
+                ngay_bd_tc, ngay_kt_tc = khoang_thoi_gian_tra_cuu
+                ket_qua_tra_cuu = []
+                
+                tong_so_ngay = (ngay_kt_tc - ngay_bd_tc).days
+                for i in range(tong_so_ngay + 1):
+                    ngay_dang_xet = ngay_bd_tc + timedelta(days=i)
+                    if ngay_dang_xet in tu_dien_tra_cuu_toan_cuc:
+                        thong_tin = tu_dien_tra_cuu_toan_cuc[ngay_dang_xet]
+                        ket_qua_tra_cuu.append({
+                            "Ngày": ngay_dang_xet.strftime("%d/%m/%Y"),
+                            "Thuộc Vụ": thong_tin["Vụ Mùa"],
+                            "Tiến Độ": f"Ngày thứ {thong_tin['Ngày Thứ']}",
+                            "Giai Đoạn": thong_tin["Giai Đoạn"]
+                        })
+                
+                if ket_qua_tra_cuu:
+                    st.dataframe(ket_qua_tra_cuu, use_container_width=True)
+                else:
+                    st.info("💡 Nông trại đang nghỉ ngơi, không có dữ liệu mùa vụ nào trong khoảng thời gian này.")
+
+        # CHỌN MÙA VỤ ĐỂ PHÂN TÍCH SÂU
+        st.markdown("---")
+        ten_vu = [f"Vụ {i+1}: {v[0].strftime('%d/%m')} - {v[1].strftime('%d/%m')}" for i, v in enumerate(mua_vu)]
+        vi_tri_vu = st.selectbox("🌾 3. Chọn Mùa Vụ Để Vẽ Biểu Đồ & Phân Tích Sâu", range(len(mua_vu)), format_func=lambda x: ten_vu[x])
         
         vu_chot = mua_vu[vi_tri_vu]
         cac_ngay_vu = sorted([n for n in so_cai.keys() if vu_chot[0] <= datetime.strptime(n, "%Y-%m-%d").date() <= vu_chot[1]])
         gd_list = chia_nho_mua_vu_thanh_cac_giai_doan(cac_ngay_vu, so_cai, bien_goc, sai_so)
         
-        # --- THẺ CHỈ SỐ NHANH (METRIC CARDS) ---
+        # THẺ CHỈ SỐ NHANH
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Tổng thời gian vụ", f"{len(cac_ngay_vu)} ngày", "Hoàn thành")
-        m2.metric("Số giai đoạn sinh trưởng", f"{len(gd_list)} GĐ", "Đã tách")
+        m1.metric("Tổng thời gian vụ", f"{len(cac_ngay_vu)} ngày")
+        m2.metric("Số giai đoạn", f"{len(gd_list)} GĐ")
         tb_tbec = np.mean([so_cai[n]['tbec'] for n in cac_ngay_vu])
         m3.metric("TBEC Trung bình", f"{tb_tbec:.2f}")
         tb_tuoi = np.mean([so_cai[n]['so_lan_tuoi'] for n in cac_ngay_vu])
         m4.metric("Tần suất tưới TB", f"{int(tb_tuoi)} lần/ngày")
         
-        st.markdown("<br>", unsafe_allow_html=True) 
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # TÍNH NĂNG 2: BỘ LỌC HIGHLIGHT GIAI ĐOẠN
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.success(f"✅ Đã phân tích được **{len(gd_list)} giai đoạn** cho {ten_vu[vi_tri_vu]}.")
+        with col2:
+            danh_sach_chon_gd = ["Tất cả"] + [f"Giai đoạn {i+1}" for i in range(len(gd_list))]
+            gd_duoc_chon = st.selectbox("🔦 Làm nổi bật Giai đoạn:", danh_sach_chon_gd)
+            
+        vi_tri_gd_highlight = None
+        if gd_duoc_chon != "Tất cả":
+            vi_tri_gd_highlight = danh_sach_chon_gd.index(gd_duoc_chon) - 1
 
-        # --- HỆ THỐNG TABS GIAO DIỆN ---
-        tab1, tab2, tab3 = st.tabs(["📊 TỔNG QUAN BIỂU ĐỒ", "📋 BẢNG SỐ LIỆU CHI TIẾT", "🔍 KÍNH LÚP TRA
+        # VẼ BIỂU ĐỒ CÓ TRUYỀN BIẾN HIGHLIGHT (Bung to full màn hình)
+        fig = ve_bieu_do_chi_so_duoc_chon(so_cai, gd_list, ten_hien_thi, bien_goc, vi_tri_gd_highlight)
+        st.pyplot(fig, use_container_width=True)
+        
+        # BẢNG DỮ LIỆU CŨNG ĐƯỢC LỌC THEO BỘ CHỌN
+        st.markdown("### 📋 Bảng Số Liệu Chi Tiết")
+        bang_data = []
+        for i, gd in enumerate(gd_list):
+            if vi_tri_gd_highlight is not None and vi_tri_gd_highlight != i:
+                continue 
+                
+            for n in gd:
+                row = {"Giai đoạn": f"GĐ {i+1}", "Ngày": n}
+                row.update({k.upper(): v for k, v in so_cai[n].items()})
+                bang_data.append(row)
+        st.dataframe(bang_data, use_container_width=True)
+        
+    else:
+        st.info("👈 Vui lòng tải lên tệp JSON để bắt đầu.")
+
+    # --- CHỮ KÝ FOOTER ---
+    st.markdown("---")
+    st.markdown(
+        "<div style='text-align: center; color: #888888; padding: 20px; font-weight: bold; font-style: italic;'>"
+        "CODED BY QUANG SKIBIDI DOPYEYE-GEMINI 👽, PLS DONATED ME<br>YOU CAN DONATE TO XXXXXXXXXXX"
+        "</div>", 
+        unsafe_allow_html=True
+    )
+
+if __name__ == "__main__":
+    main()
