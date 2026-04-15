@@ -177,7 +177,7 @@ def ve_bieu_do_chi_so_duoc_chon(du_lieu_tong_hop, danh_sach_cac_giai_doan, ten_c
 # =====================================================================
 
 def main():
-    st.set_page_config(page_title="Phân Tích Nông Nghiệp", layout="wide")
+    st.set_page_config(page_title="TOOL UI HỆ THỐNG TỰ ĐỘNG NÔNG  NGHIỆP V1.5", layout="wide")
     st.title("📊 Bảng Điều Khiển Nông Nghiệp Thông Minh")
     
     with st.sidebar:
