@@ -1,6 +1,5 @@
 import streamlit as st
 import numpy as np
-import pandas as pd
 import json
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
@@ -226,7 +225,7 @@ def main():
         mua_vu = tim_kiem_cac_mua_vu(so_cai, bien_goc, nguong)
         if not mua_vu: st.warning("Không tìm thấy vụ mùa nào thỏa mãn ngưỡng!"); return
 
-        # CHỌN MÙA VỤ ĐỂ PHÂN TÍCH SÂU (Chuyển lên trên cùng)
+        # CHỌN MÙA VỤ ĐỂ PHÂN TÍCH SÂU
         st.markdown("---")
         ten_vu = [f"Vụ {i+1}: {v[0].strftime('%d/%m')} - {v[1].strftime('%d/%m')}" for i, v in enumerate(mua_vu)]
         vi_tri_vu = st.selectbox("🌾 3. Chọn Mùa Vụ Để Vẽ Biểu Đồ & Phân Tích Sâu", range(len(mua_vu)), format_func=lambda x: ten_vu[x])
@@ -262,7 +261,7 @@ def main():
         fig = ve_bieu_do_chi_so_duoc_chon(so_cai, gd_list, ten_hien_thi, bien_goc, vi_tri_gd_highlight)
         st.pyplot(fig, use_container_width=True)
         
-        # BẢNG DỮ LIỆU ĐƯỢC TÔ SÁNG CỘT CHỈ SỐ ĐANG LÀM MỐC
+        # BẢNG DỮ LIỆU ĐÃ LÀM TRÒN VÀ CHỈNH TÊN CỘT (KHÔNG DÙNG PANDAS)
         st.markdown("### 📋 Bảng Số Liệu Chi Tiết")
         bang_data = []
         for i, gd in enumerate(gd_list):
@@ -270,23 +269,18 @@ def main():
                 continue 
                 
             for n in gd:
-                row = {"Giai đoạn": f"GĐ {i+1}", "Ngày": n}
-                row.update({k.upper(): v for k, v in so_cai[n].items()})
+                row = {
+                    "Giai đoạn": f"GĐ {i+1}", 
+                    "Ngày": n,
+                    "LẦN TƯỚI": so_cai[n]['so_lan_tuoi'],
+                    "PHÚT TƯỚI": so_cai[n]['thoi_gian_tuoi_phut'],
+                    "TBEC": round(so_cai[n]['tbec'], 2),
+                    "EC YÊU CẦU": round(so_cai[n]['ec_yeu_cau'], 2)
+                }
                 bang_data.append(row)
                 
         if bang_data:
-            df_bang = pd.DataFrame(bang_data)
-            cot_can_to_dam = bien_goc.upper()
-            
-            # Hàm áp dụng CSS cho Pandas Styler
-            def to_mau_cot_chon(s):
-                if s.name == cot_can_to_dam:
-                    return ['background-color: rgba(255, 204, 0, 0.3); font-weight: bold'] * len(s)
-                return [''] * len(s)
-                
-            # Render bảng đã được styling
-            bang_da_style = df_bang.style.apply(to_mau_cot_chon)
-            st.dataframe(bang_da_style, use_container_width=True)
+            st.dataframe(bang_data, use_container_width=True)
         else:
             st.info("Không có dữ liệu để hiển thị bảng.")
 
