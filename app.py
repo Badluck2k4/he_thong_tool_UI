@@ -40,8 +40,27 @@ def tao_so_cai_du_lieu_tong_hop(danh_sach_tep_tin_nho_giot, danh_sach_tep_tin_ch
         toan_bo_du_lieu_nho_giot = []
         for tep_tin in danh_sach_tep_tin_nho_giot:
             tep_tin.seek(0)
-            du_lieu_trong_tep = json.load(tep_tin)
-            for dong in du_lieu_trong_tep: toan_bo_du_lieu_nho_giot.append(dong)
+            # ĐỌC FILE AN TOÀN TRÁNH LỖI EXTRA DATA
+            try:
+                noi_dung = tep_tin.read().decode("utf-8")
+                # Thử đọc theo kiểu JSON Lines (từng dòng) trước
+                du_lieu_trong_tep = []
+                for dong_chuoi in noi_dung.splitlines():
+                    dong_chuoi = dong_chuoi.strip()
+                    if dong_chuoi:
+                        du_lieu_trong_tep.append(json.loads(dong_chuoi))
+            except json.decoder.JSONDecodeError:
+                # Nếu không phải JSON Lines, quay lại đọc kiểu JSON chuẩn
+                try:
+                    tep_tin.seek(0)
+                    du_lieu_trong_tep = json.load(tep_tin)
+                except json.decoder.JSONDecodeError as e:
+                    st.error(f"❌ File nhỏ giọt **{tep_tin.name}** bị lỗi định dạng cấu trúc JSON!")
+                    st.caption(f"Chi tiết lỗi: {e}")
+                    st.stop()
+
+            for dong in du_lieu_trong_tep: 
+                toan_bo_du_lieu_nho_giot.append(dong)
         
         du_lieu_nho_giot_da_loc = [d for d in toan_bo_du_lieu_nho_giot if str(d.get('STT')) == khu_vuc_duoc_chon]
         du_lieu_nho_giot_da_loc.sort(key=ham_lay_thoi_gian_de_sap_xep)
@@ -72,7 +91,23 @@ def tao_so_cai_du_lieu_tong_hop(danh_sach_tep_tin_nho_giot, danh_sach_tep_tin_ch
     if danh_sach_tep_tin_cham_phan:
         for tep_tin in danh_sach_tep_tin_cham_phan:
             tep_tin.seek(0)
-            du_lieu_trong_tep = json.load(tep_tin)
+            # ĐỌC FILE AN TOÀN TRÁNH LỖI EXTRA DATA
+            try:
+                noi_dung = tep_tin.read().decode("utf-8")
+                du_lieu_trong_tep = []
+                for dong_chuoi in noi_dung.splitlines():
+                    dong_chuoi = dong_chuoi.strip()
+                    if dong_chuoi:
+                        du_lieu_trong_tep.append(json.loads(dong_chuoi))
+            except json.decoder.JSONDecodeError:
+                try:
+                    tep_tin.seek(0)
+                    du_lieu_trong_tep = json.load(tep_tin)
+                except json.decoder.JSONDecodeError as e:
+                    st.error(f"❌ File châm phân **{tep_tin.name}** bị lỗi định dạng cấu trúc JSON!")
+                    st.caption(f"Chi tiết lỗi: {e}")
+                    st.stop()
+
             for dong_du_lieu in du_lieu_trong_tep:
                 if str(dong_du_lieu.get('STT')) != khu_vuc_duoc_chon: continue 
                 try: ngay_str = datetime.strptime(dong_du_lieu['Thời gian'], "%Y-%m-%d %H-%M-%S").strftime("%Y-%m-%d")
@@ -338,3 +373,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+        
