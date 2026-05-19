@@ -12,7 +12,7 @@ CAU_HINH_QUY_TAC = {
     "GIAY_TUOI_TOI_THIEU": 20,     
     "GIAY_TUOI_TOI_DA": 3600,      
     "SO_NGAY_NGHI_TOI_DA": 2,      
-    "SO_NGAY_TOI_THIEU_MOT_VU": 10  
+    "SO_NGAY_TOI_THIEU_MOT_VU": 15  
 }
 
 # =====================================================================
